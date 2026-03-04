@@ -358,9 +358,9 @@ Une fois tout déployé, note ces informations :
 
 ```
 📦 GitHub Repo     : https://github.com/danielaltaf-stack/omniflow
-🌐 Frontend        : https://omniflow-web.vercel.app (ou URL Vercel attribuée)
-⚡ Backend API     : https://omniflow-api.onrender.com (ou URL Render attribuée)
-📊 API Docs        : https://omniflow-api.onrender.com/docs
+🌐 Frontend        : https://omniflow-web-sigma.vercel.app
+⚡ Backend API     : https://omniflow-api-g6p2.onrender.com
+📊 API Docs        : https://omniflow-api-g6p2.onrender.com/docs (désactivé en prod)
 🐘 Database        : Neon (eu-central-1) — console.neon.tech
 🔴 Redis           : Upstash (vast-koala-21919) — console.upstash.com
 🐛 Error Tracking  : Sentry (optionnel) — sentry.io
@@ -431,10 +431,10 @@ git push origin main
 - [x] GitHub repo créé et code pushé → https://github.com/danielaltaf-stack/omniflow
 - [x] Neon PostgreSQL créé (eu-central-1) — `DATABASE_URL` prête
 - [x] Clés de sécurité générées (`SECRET_KEY` + `ENCRYPTION_KEY`)
-- [ ] **Upstash Redis** — récupérer l'URL **Redis Protocol** `rediss://...` (pas l'URL REST) → étape 3
-- [ ] **Render** Web Service créé — toutes les env vars ajoutées → étape 5
-- [ ] **Migrations Alembic** exécutées via Render Shell → étape 5.7
-- [ ] Backend accessible : `/health/live` retourne `{"status": "ok"}`
-- [ ] **Vercel** projet créé — root directory `apps/web` — env vars ajoutées → étape 6
-- [ ] Frontend accessible et connecté au backend
-- [ ] CORS vérifié (pas d'erreur dans la console F12)
+- [x] **Upstash Redis** configuré — `rediss://...@vast-koala-21919.upstash.io:6379`
+- [x] **Render** Web Service créé — 24 env vars configurées → https://omniflow-api-g6p2.onrender.com
+- [x] **Migrations Alembic** — 28 migrations exécutées sur Neon
+- [x] Backend accessible : `/health/ready` → `{"status": "ready", "database": "ok", "redis": "ok"}`
+- [x] **Vercel** projet déployé — root directory `apps/web` → https://omniflow-web-sigma.vercel.app
+- [x] Frontend accessible (200, 142K chars)
+- [ ] CORS vérifié (tester dans la console F12 du navigateur)

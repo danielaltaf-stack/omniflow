@@ -162,8 +162,8 @@ export async function initSentry(): Promise<boolean> {
       replaysOnErrorSampleRate: 1.0, // 100% of sessions with errors recorded
 
       // Filtering
-      beforeSend: beforeSend as Parameters<typeof Sentry.init>[0] extends { beforeSend?: infer B } ? B : never,
-      beforeSendTransaction: beforeSendTransaction as Parameters<typeof Sentry.init>[0] extends { beforeSendTransaction?: infer B } ? B : never,
+      beforeSend: beforeSend as unknown as Parameters<typeof Sentry.init>[0] extends { beforeSend?: infer B } ? B : never,
+      beforeSendTransaction: beforeSendTransaction as unknown as Parameters<typeof Sentry.init>[0] extends { beforeSendTransaction?: infer B } ? B : never,
 
       // Privacy (RGPD)
       sendDefaultPii: false,

@@ -96,11 +96,10 @@ export function initWebVitalsReporter() {
   if (typeof window === 'undefined') return
 
   // Dynamically import web-vitals to avoid SSR issues
-  import('web-vitals').then(({ onCLS, onFID, onFCP, onLCP, onTTFB, onINP }) => {
+  import('web-vitals').then(({ onCLS, onFCP, onLCP, onTTFB, onINP }) => {
     const handler = (metric: Metric) => enqueue(mapMetric(metric))
 
     onCLS(handler)
-    onFID(handler)
     onFCP(handler)
     onLCP(handler)
     onTTFB(handler)

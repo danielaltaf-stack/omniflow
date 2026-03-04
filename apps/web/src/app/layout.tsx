@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next'
-import { Inter } from 'next/font/google'
+import { Inter, Space_Grotesk } from 'next/font/google'
 
 import { Providers } from '@/providers/providers'
 import { SWRegister, OfflineIndicator } from '@/components/pwa'
@@ -11,16 +11,49 @@ const inter = Inter({
   display: 'swap',
 })
 
+const spaceGrotesk = Space_Grotesk({
+  subsets: ['latin'],
+  variable: '--font-heading',
+  display: 'swap',
+})
+
 export const metadata: Metadata = {
-  title: 'OmniFlow — Votre patrimoine unifié',
+  title: {
+    default: 'OmniFlow — Votre patrimoine unifié, intelligent',
+    template: '%s | OmniFlow',
+  },
   description:
-    'Agrégez banques, crypto, bourse, immobilier et dettes en une seule app.',
+    'Agrégez banques, crypto, bourse, immobilier et dettes en une seule app propulsée par l\'IA. Budget intelligent, conseiller Nova, simulateur retraite.',
+  keywords: [
+    'patrimoine', 'gestion patrimoine', 'agrégation bancaire', 'crypto', 'bourse',
+    'immobilier', 'budget', 'IA finance', 'fintech', 'OmniFlow',
+  ],
+  authors: [{ name: 'OmniFlow' }],
+  creator: 'OmniFlow',
   icons: { icon: '/favicon.png', apple: '/icons/icon-192.svg' },
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
     title: 'OmniFlow',
+  },
+  openGraph: {
+    type: 'website',
+    locale: 'fr_FR',
+    siteName: 'OmniFlow',
+    title: 'OmniFlow — Votre patrimoine unifié, intelligent',
+    description:
+      'Banque · Crypto · Bourse · Immobilier — une seule app, propulsée par l\'IA.',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'OmniFlow — Votre patrimoine unifié, intelligent',
+    description:
+      'Banque · Crypto · Bourse · Immobilier — une seule app, propulsée par l\'IA.',
+  },
+  robots: {
+    index: true,
+    follow: true,
   },
 }
 
@@ -39,7 +72,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="fr" suppressHydrationWarning className={inter.variable}>
+    <html lang="fr" suppressHydrationWarning className={`${inter.variable} ${spaceGrotesk.variable}`}>
       <body className="min-h-screen font-sans">
         <SWRegister />
         <OfflineIndicator />

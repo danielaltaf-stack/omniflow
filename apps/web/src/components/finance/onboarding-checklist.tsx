@@ -18,7 +18,7 @@ import {
 import { useRouter } from 'next/navigation'
 import { useBankStore } from '@/stores/bank-store'
 import { useCryptoStore } from '@/stores/crypto-store'
-import { Confetti } from '@/components/ui/confetti'
+import { ConfettiBurst } from '@/components/ui/confetti'
 
 const DISMISS_KEY = 'omniflow_onboarding_dismissed'
 
@@ -115,7 +115,7 @@ export function OnboardingChecklist() {
 
   return (
     <>
-      {showConfetti && <Confetti />}
+      {showConfetti && <ConfettiBurst active={showConfetti} />}
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}

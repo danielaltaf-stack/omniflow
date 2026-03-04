@@ -115,8 +115,9 @@ def _seed_sql() -> str:
         slug, name, online, *fees = r
         bval = "true" if online else "false"
         fee_cols = ", ".join(str(f) for f in fees)
+        safe_name = name.replace("'", "''")
         values.append(
-            f"('{slug}', '{name}', {bval}, {fee_cols})"
+            f"('{slug}', '{safe_name}', {bval}, {fee_cols})"
         )
     cols = (
         "bank_slug, bank_name, is_online, "

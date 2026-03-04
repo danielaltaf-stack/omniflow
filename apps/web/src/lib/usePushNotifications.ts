@@ -111,19 +111,19 @@ export function usePushNotifications(): UsePushNotificationsReturn {
       // 4. Subscribe via PushManager
       const subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(vapidKey),
+        applicationServerKey: urlBase64ToUint8Array(vapidKey).buffer as ArrayBuffer,
       })
 
       // 5. Send subscription to backend
       const p256dh = btoa(
-        String.fromCharCode(...new Uint8Array(subscription.getKey('p256dh')!))
+        String.fromCharCode(...Array.from(new Uint8Array(subscription.getKey('p256dh')!)))
       )
         .replace(/\+/g, '-')
         .replace(/\//g, '_')
         .replace(/=+$/, '')
 
       const auth = btoa(
-        String.fromCharCode(...new Uint8Array(subscription.getKey('auth')!))
+        String.fromCharCode(...Array.from(new Uint8Array(subscription.getKey('auth')!)))
       )
         .replace(/\+/g, '-')
         .replace(/\//g, '_')
@@ -157,7 +157,7 @@ export function usePushNotifications(): UsePushNotificationsReturn {
       if (subscription) {
         // Notify backend
         try {
-          await apiClient.delete('/api/v1/push/unsubscribe', {
+          await apiClient.post('/api/v1/push/unsubscribe', {
             endpoint: subscription.endpoint,
           } as any)
         } catch {

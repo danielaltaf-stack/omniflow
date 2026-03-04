@@ -1,8 +1,8 @@
 # OmniFlow — Plan de Transformation Stratégique
 
 > **Auteur** : CTO Office — Audit initié le 2 mars 2026
-> **Statut** : **Phase A1 + A2 + A3 + A4 + B1 + B2 + B3 + B4 + B5 + F1.1 + F1.2 + F1.3 + F1.4 + F1.5 + F1.6 + F1.7 + C1 + C2 + C3 + C4 + C5 + G + E1 + E2 + E3 + E4 + E5.0 + E5.1 + E5.2 + E5.3 — IMPLÉMENTÉES** ✅ (4 mars 2026) — Code validé, 480+ tests automatisés, couverture 50%+.
-> **Dernière phase** : Phase E5.2 + E5.3 (Frontend Deployment & CI/CD Pipeline v2 — Vercel declarative config (vercel.json : framework nextjs, région cdg1 Paris, 4 règles headers Cache-Control API no-cache/static immutable 1yr/images stale-while-revalidate/manifest, rewrites API proxy vers api.omniflow.app, redirects www→root permanent, installCommand npm ci --prefer-offline), Dockerfile.prod frontend (3-stage multi-stage Node 20 Alpine : deps→builder→runner, ARG NEXT_PUBLIC_* build-time injection, non-root user nextjs:nodejs uid 1001, tini PID 1 signal handling, HEALTHCHECK curl localhost:3000, standalone output copy, NEXT_TELEMETRY_DISABLED), Sentry Frontend SDK (@sentry/nextjs dynamic import avec graceful degradation, beforeSend filter SUPPRESSED_ERRORS 10 patterns : ResizeObserver/ChunkLoadError/NetworkError/AbortError/browser-extensions, scrubbing RGPD Authorization/cookies/passwords dans headers+body, beforeSendTransaction drop /health /_next/ /favicon, Session Replay 10% sessions + 100% on error avec maskAllInputs, distributed tracing vers api.omniflow.app, denyUrls extensions/analytics, sendDefaultPii false, tracesSampleRate 0.2, profilesSampleRate 0.1), .env.production.example frontend (8 variables : API_URL/APP_URL/APP_VERSION/SENTRY_DSN/SENTRY_ENVIRONMENT/PLAUSIBLE_DOMAIN/BUILD_ID/ANALYZE), CI/CD Pipeline v2 (GitHub Actions 6 jobs : backend-lint avec bandit SAST scan artifact, backend-test avec postgres:16-alpine + redis:7-alpine + coverage --cov-fail-under=50, frontend-quality tsc --noEmit + next lint --max-warnings 0, security-scan pip-audit + npm audit --audit-level=high + trivy fs HIGH,CRITICAL, frontend-build standalone + bundle size check warn >2MB, deploy Railway webhook + 45s wait + health check 5 retries + Sentry release creation), branch protection (concurrency cancel-in-progress, deploy only push main, environment: production). 3 nouveaux fichiers frontend (vercel.json, Dockerfile.prod, sentry.client.config.ts 240 lignes), 1 template env (.env.production.example web), 1 fichier modifié frontend (providers.tsx initSentry), 1 pipeline réécrit (ci.yml 3→6 jobs 260 lignes), 67 tests E5.2/E5.3 (6 classes : Vercel 9 tests, Dockerfile 12 tests, Sentry client 14 tests, CI/CD Pipeline 22 tests, Env template 5 tests, Providers integration 3 tests))
+> **Statut** : **Phase A1 + A2 + A3 + A4 + B1 + B2 + B3 + B4 + B5 + F1.1 + F1.2 + F1.3 + F1.4 + F1.5 + F1.6 + F1.7 + C1 + C2 + C3 + C4 + C5 + G + E1 + E2 + E3 + E4 + E5.0 + E5.1 + E5.2 + E5.3 + E5.4-P1 — IMPLÉMENTÉES** ✅ (4 mars 2026) — Code validé, 480+ tests automatisés, couverture 50%+.
+> **Dernière phase** : Phase E5.4-P1 (Landing Page "Super-Vision" Narrative Immersive — 12 composants React + auth-aware CTAs + SEO enrichie. Améliorations post-implémentation : CTAs adaptatifs état auth (HeroSection/FloatingNav/CTASection détectent isAuthenticated via useAuthStore — affichent "Aller au Dashboard"/"Mon Dashboard" pour utilisateurs connectés, "Commencer gratuitement"/"Se connecter" pour visiteurs), métadonnées SEO enrichies (layout.tsx : title template, Open Graph fr_FR, Twitter card summary_large_image, keywords patrimoine/crypto/bourse/fintech, robots index+follow, meta description étendue), fix redirect supprimé (page.tsx ne redirige plus vers /dashboard, landing toujours visible sur /). Composants : HeroSection, FeaturesSection, StatsSection, HowItWorksSection, FAQSection, CTASection, Footer, FloatingNav, CustomCursor, ScrollProgress, SmoothScrollProvider, NoiseOverlay. Stack : gsap + lenis + framer-motion + lucide-react + next/font/google Space_Grotesk.)
 > **Scope** : Audit complet du code source + Benchmarking concurrentiel + Roadmap 6 phases
 
 ---
@@ -6033,131 +6033,377 @@ E5.3.6  Inventaire des fichiers E5.2 + E5.3
         └── test_cicd.py                 — Tests validation pipeline & config déploiement
 ```
 
-**E5.4 — Landing Page Marketing (Next.js SSG)**
+**E5.4 — Landing Page "Super-Vision" — Expérience Narrative Immersive (Next.js SSG + GSAP)**
 
 ```
-Objectif : Page marketing world-class qui convertit les visiteurs en utilisateurs.
-           Benchmark : linear.app, finary.com, arc.net, raycast.com
-           Accessible sur / (root) quand non-authentifié, redirige vers /dashboard sinon.
+═══════════════════════════════════════════════════════════════════════════════════
+PHILOSOPHIE — RUPTURE TOTALE AVEC LES LANDING PAGES FINTECH CLASSIQUES
+═══════════════════════════════════════════════════════════════════════════════════
 
-E5.4.1  Structure de la Landing Page
-        ┌──────────────────────────────────────────────────────────────┐
-        │                     LANDING PAGE — SECTIONS                   │
-        ├──────────────────────────────────────────────────────────────┤
-        │                                                              │
-        │  1. HERO SECTION                                             │
-        │     → Titre animé (typewriter effect) :                      │
-        │       "Votre patrimoine. Unifié. Intelligent."               │
-        │     → Sous-titre : "Banque + Crypto + Bourse + Immobilier    │
-        │       dans une seule app. Propulsé par l'IA."                │
-        │     → CTA primaire : "Commencer gratuitement" → /register    │
-        │     → CTA secondaire : "Voir la démo" → scroll to demo      │
-        │     → Background : gradient mesh animé (CSS) ou             │
-        │       globe 3D rotatif (three.js léger)                      │
-        │     → Social proof : "200+ beta testeurs" (animated counter) │
-        │     → Trust badges : "Chiffrement AES-256", "RGPD",         │
-        │       "Open Source"                                          │
-        │                                                              │
-        │  2. BENTO GRID — Features showcase                           │
-        │     → 6 cartes animées (hover parallax + Framer Motion) :    │
-        │       ┌──────────┬──────────┬──────────┐                     │
-        │       │ Patrimoine│ Budget   │ IA Nova  │                    │
-        │       │ Unifié   │ Auto     │ Advisor  │                    │
-        │       ├──────────┼──────────┼──────────┤                     │
-        │       │ Crypto   │ Retraite │ Coffre   │                    │
-        │       │ Tracker  │ Simulator│ Digital  │                    │
-        │       └──────────┴──────────┴──────────┘                     │
-        │     → Chaque carte : icône animée + titre + 1 ligne          │
-        │     → Scroll-triggered appearance (intersection observer)    │
-        │                                                              │
-        │  3. DEMO INTERACTIVE                                         │
-        │     → Dashboard mockup dans un browser frame                 │
-        │     → Données fictives réalistes (pas de compte requis)      │
-        │     → Tabs cliquables : Patrimoine / Budget / Crypto / IA    │
-        │     → Animations de graphiques (Recharts avec spring)        │
-        │     → Guided tour overlay avec tooltips                      │
-        │     → Responsive : mobile-first, apparaît collapsed          │
-        │                                                              │
-        │  4. STATS / SOCIAL PROOF                                     │
-        │     → Animated counters (scroll-triggered) :                 │
-        │       "34 banques" / "8 000+ cryptos" / "100% RGPD"         │
-        │       "< 200ms latence" / "256-bit chiffrement"              │
-        │     → Logos des banques compatibles (slider horizontal)      │
-        │     → Testimonials (quand disponibles) ou beta badges        │
-        │                                                              │
-        │  5. PRICING / PLAN                                           │
-        │     → Plan gratuit (current) : toutes features, fair use     │
-        │     → Plan Pro (futur) : multi-portfolio, priority support   │
-        │     → Comparaison visuelle toggle monthly/yearly             │
-        │     → "Gratuit pendant la beta" badge                        │
-        │                                                              │
-        │  6. HOW IT WORKS                                             │
-        │     → 3 étapes illustrées (Lottie ou SVG animés) :          │
-        │       1. "Connectez vos comptes" (bank icons)                │
-        │       2. "L'IA analyse tout" (brain animation)               │
-        │       3. "Prenez les bonnes décisions" (chart up)            │
-        │     → Timeline vertical avec scroll progress indicator       │
-        │                                                              │
-        │  7. FAQ SECTION                                              │
-        │     → Accordion (Framer Motion spring) :                     │
-        │       - "Mes données sont-elles en sécurité ?"               │
-        │       - "Comment ça marche avec ma banque ?"                 │
-        │       - "C'est vraiment gratuit ?"                           │
-        │       - "Qui développe OmniFlow ?"                           │
-        │       - "Puis-je exporter mes données ?"                     │
-        │     → Schema.org FAQPage JSON-LD pour Google rich results    │
-        │                                                              │
-        │  8. CTA FINAL + WAITLIST                                     │
-        │     → "Rejoignez la révolution financière"                   │
-        │     → Email input + "S'inscrire" button                      │
-        │     → Si waitlist mode : POST /api/v1/waitlist               │
-        │     → Si public : redirect to /register                      │
-        │     → Animated background (gradient shift)                   │
-        │                                                              │
-        │  9. FOOTER                                                   │
-        │     → Colonnes : Produit / Ressources / Légal / Social       │
-        │     → Links : CGU, Privacy, Changelog, GitHub, Twitter       │
-        │     → "Made in France 🇫🇷" badge                             │
-        │     → Version number (from changelog API)                    │
-        │                                                              │
-        └──────────────────────────────────────────────────────────────┘
+Finary = Bento Grid statique. Trade Republic = Hero + Features + CTA classique.
+OmniFlow = UNE EXPÉRIENCE NARRATIVE INTERACTIVE où chaque scroll raconte une
+étape de la "Super-Vision" financière.
 
-E5.4.2  SEO & Performance
-        → Metadata (Next.js generateMetadata) :
-          title       : "OmniFlow — Votre patrimoine unifié et intelligent"
-          description : "Agrégez banque, crypto, bourse et immobilier. Budget IA,
-                         simulateur retraite, coffre digital. 100% RGPD."
-          keywords    : finances personnelles, patrimoine, crypto, budget, IA
-          og:image    : /og-image.png (1200×630, auto-generated or Figma)
-          og:type     : website
-          twitter:card : summary_large_image
-        → JSON-LD Structured Data :
-          - Organization (OmniFlow)
-          - WebApplication (SaaS)
-          - FAQPage (7 questions)
-          - BreadcrumbList
-        → Sitemap.xml : auto-generated via next-sitemap
-        → robots.txt : Allow all, Sitemap reference
-        → Performance targets :
-          - LCP (Largest Contentful Paint) : < 2.5s
-          - FID (First Input Delay) : < 100ms
-          - CLS (Cumulative Layout Shift) : < 0.1
-          - TTFB : < 200ms (Vercel Edge)
-          - First Load JS : < 100KB (landing page)
-          - Lighthouse : 100 Performance, 100 Accessibility, 100 Best Practices, 100 SEO
+Direction Artistique :
+→ Palette "Radical Violet" : #6C5CE7 (brand) → #A29BFE (light) → #1a0533 (deep)
+  avec accents néon #00D68F (gain) et #FF4757 (loss) en micro-highlights.
+→ Fond noir OLED (#000000) avec grain (noise texture SVG 2% opacity)
+  pour casser l'aspect "trop lisse IA" et ajouter de la matière.
+→ Typographie signature : Contrastes EXTRÊMES —
+  Titres MASSIFS (clamp(3rem, 8vw, 7rem)) vs textes fins (0.875rem, opacity 0.7).
+→ Motion Design : pas de fade-in basiques. Des GLISSEMENTS, des SUPERPOSITIONS
+  (layering), des TRANSFORMATIONS au scroll via GSAP ScrollTrigger.
+→ Curseur intelligent : custom cursor qui mute (loupe sur graphiques,
+  pulsation sur CTA, traînée violette lumineuse partout).
+→ Easter Eggs : micro-animations cachées (hover chiffres → particules,
+  clic logo → pulse radial violet, Konami Code → rain de crypto icons).
 
-E5.4.3  Responsive & Animations
-        → Breakpoints : mobile (< 640px), tablet (640-1024px), desktop (> 1024px)
-        → Mobile-first : hero stacked, bento 1-col, demo collapsed
-        → Animations (Framer Motion) :
-          - Hero : fade-up staggered (title → subtitle → CTA → badges)
-          - Bento : scroll-triggered scale-up avec spring physics
-          - Stats counters : count-up animation on intersection
-          - FAQ : accordion height spring (no layout shift)
-          - Demo : tab switch cross-fade
-          - CTA : gradient background animation (CSS keyframes)
-        → Reduced motion : respecte prefers-reduced-motion
-        → Dark/Light : support natif via next-themes (déjà implémenté)
+Stack Technique Landing Page :
+→ GSAP + ScrollTrigger (animations scroll haute-performance, GPU-accelerated)
+→ Lenis (smooth scroll ultra-fluide, inertie naturelle)
+→ Framer Motion (composants React + AnimatePresence transitions)
+→ SVG animés inline (data-storytelling flux financiers)
+→ CSS noise texture (grain) + backdrop-filter (blur cinétique)
+→ next/font local pour polices signature ("Space Grotesk" + "Inter")
+→ Spline/Three.js léger : sphère de données 3D en arrière-plan
+
+Performance non-négociable :
+→ Tout GPU-accelerated (transform3d, will-change)
+→ prefers-reduced-motion respecté (fallback gracieux sans animation)
+→ First Load JS < 120KB (GSAP tree-shaken, lazy-load sections below fold)
+→ LCP < 2.0s, CLS < 0.05, INP < 100ms
+→ Mobile tactile = expérience DIFFÉRENTE et RICHE, pas une version dégradée
+  (haptic feedback simulé par micro-vibrations visuelles sur touch events)
+
+═══════════════════════════════════════════════════════════════════════════════════
+DÉCOUPAGE EN PARTIES INCRÉMENTALES (à faire étape par étape)
+═══════════════════════════════════════════════════════════════════════════════════
+
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│  E5.4-P1 — FONDATION : Layout, Smooth Scroll, Cursor, Grain                   │
+│  (Cette session — implémentation immédiate)                                     │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│  1. DÉPENDANCES                                                                 │
+│     npm i gsap @studio-freight/lenis                                            │
+│     (GSAP gratuit pour sites non-payants, ScrollTrigger inclus)                 │
+│     Space Grotesk via next/font/google (variable font, subset latin)            │
+│                                                                                 │
+│  2. LAYOUT NARRATIF (LandingPage.tsx)                                           │
+│     → Structure : sections pleine hauteur empilées, position sticky pour        │
+│       créer l'effet de "layering" (les sections glissent les unes sur          │
+│       les autres comme des cartes qui se dépilent)                              │
+│     → Wrapper Lenis pour smooth scroll (instance globale, RAF loop)             │
+│     → ScrollProgress indicator : barre violette fine en haut (fixed),           │
+│       width liée au scroll progress via GSAP                                    │
+│     → Navigation flottante transparente (glassmorphism) qui apparaît            │
+│       après le hero (GSAP trigger)                                              │
+│                                                                                 │
+│  3. HERO SECTION — "LA PREMIÈRE IMPRESSION"                                     │
+│     → Plein écran 100vh, fond noir OLED avec noise grain overlay               │
+│     → Titre MASSIF centré : "Votre patrimoine." (ligne 1)                      │
+│       "Unifié. Intelligent." (ligne 2, gradient text violet→bleu)              │
+│     → Chaque mot apparaît avec un GSAP SplitText-like effect                   │
+│       (reveal lettre par lettre avec mask-clip, 40ms stagger)                  │
+│     → Sous-titre fin (opacity 0.6) : "Banque · Crypto · Bourse ·              │
+│       Immobilier — une seule app, propulsée par l'IA."                         │
+│     → 2 CTA : primaire "Commencer" (filled violet, hover glow)                │
+│              secondaire "Explorer ↓" (ghost, scroll-to next section)           │
+│     → Background : Orbe violette animée (radial-gradient pulsant,              │
+│       mix-blend-mode screen, 60% opacity, blur 120px)                          │
+│       + particules flottantes ultra-subtiles (dots violets, 8 éléments,        │
+│       animation CSS float aléatoire)                                            │
+│     → Trust badges row : "AES-256" | "RGPD" | "Open Source"                   │
+│       (icônes lucide-react, texte xs, opacity 0.4 → 0.7 on hover)             │
+│     → Scroll indicator : chevron animé bounce infini en bas                    │
+│                                                                                 │
+│  4. FEATURES NARRATIVE SCROLL — "LES SUPER-POUVOIRS"                           │
+│     → 6 features présentées en scroll NARRATIF (pas de grid) :                 │
+│       chaque feature = une section qui PIN pendant le scroll,                  │
+│       le contenu se transforme (texte + illustration animée)                   │
+│     → Layout : LEFT = texte (titre + description + tag),                       │
+│                RIGHT = illustration SVG animée (flux financiers)                │
+│     → Features :                                                                │
+│       1. "Vision 360°" — agrégation patrimoine (SVG : briques qui              │
+│          convergent vers un centre unifié, animation draw-in)                  │
+│       2. "Budget IA" — catégorisation intelligente (SVG : flux de              │
+│          transactions qui se trient automatiquement en catégories)             │
+│       3. "Nova, votre copilote" — advisor IA (SVG : bulle de chat              │
+│          avec sparkles, texte qui s'écrit en temps réel)                       │
+│       4. "Crypto & Bourse" — multi-assets (SVG : courbes de prix              │
+│          qui se dessinent, candlesticks animés)                                │
+│       5. "Simulateur Retraite" — projection (SVG : timeline avec              │
+│          point qui avance, patrimoine qui croît)                               │
+│       6. "Coffre-Fort Digital" — vault (SVG : cadenas qui s'ouvre,             │
+│          documents qui apparaissent en stack)                                  │
+│     → Mobile : stack vertical, illustrations au-dessus du texte,               │
+│       scroll naturel (pas de pinning), fade-in au scroll                       │
+│                                                                                 │
+│  5. STATS VIVANTES — "LES CHIFFRES QUI PARLENT"                               │
+│     → Section fond bg-secondary avec grain                                     │
+│     → 4 compteurs animés (scroll-triggered count-up) :                         │
+│       "34+ banques" / "8 000+ cryptos" / "<200ms latence" / "100% RGPD"       │
+│     → Easter Egg : hover sur un chiffre → explosion de particules              │
+│       violettes (spawn 12 dots, GSAP scatter animation 400ms)                  │
+│     → Logos banques : défilement horizontal infini (CSS marquee,               │
+│       pauseOnHover, 30 logos banking en grayscale → color on hover)            │
+│                                                                                 │
+│  6. HOW IT WORKS — "3 ÉTAPES, 3 MINUTES"                                       │
+│     → Timeline verticale avec scroll progress (barre qui se remplit)           │
+│     → 3 steps : "Connectez" → "L'IA analyse" → "Décidez"                      │
+│     → Chaque step apparaît quand le scroll progress atteint le seuil           │
+│     → Icônes SVG animées inline pour chaque step                               │
+│     → Numérotation massive ("01", "02", "03") en background                   │
+│       (font-size 15rem, opacity 0.03, position absolute)                       │
+│                                                                                 │
+│  7. FAQ SECTION                                                                 │
+│     → Accordion Framer Motion (AnimatePresence + height auto)                  │
+│     → 5 questions pré-écrites                                                  │
+│     → JSON-LD FAQPage pour Google Rich Results                                 │
+│     → Border-left violet sur la question ouverte                               │
+│                                                                                 │
+│  8. CTA FINAL — "LE MOMENT DE VÉRITÉ"                                          │
+│     → Gradient fond animé (violet → deep purple shift, CSS keyframes)          │
+│     → Titre : "Prenez le contrôle de votre avenir financier"                   │
+│     → Bouton CTA massif (padding généreux, glow effect au hover)               │
+│     → Input email + submit si mode waitlist                                    │
+│                                                                                 │
+│  9. FOOTER PREMIUM                                                              │
+│     → 4 colonnes : Produit / Ressources / Légal / Social                      │
+│     → "Made in France" badge                                                    │
+│     → Divider avec gradient fade-out                                           │
+│     → Easter Egg : clic sur le logo footer → pulse radial violet               │
+│                                                                                 │
+│  10. CUSTOM CURSOR                                                              │
+│      → Cercle 20px violet (border 1.5px brand), suit la souris                 │
+│        avec lerp (ease-out naturel, ~0.15 ratio)                               │
+│      → Sur liens/boutons : scale(1.5) + fill semi-transparent                  │
+│      → Sur les chiffres stats : icône loupe (scale up)                         │
+│      → Traînée lumineuse : 2ème cercle plus grand, plus flou,                  │
+│        delay plus grand → effet "comète violette"                              │
+│      → Mobile : désactivé (pointer: coarse détection)                          │
+│                                                                                 │
+│  11. NOISE GRAIN OVERLAY                                                        │
+│      → SVG <filter> avec feTurbulence (baseFrequency 0.65)                     │
+│        appliqué en position fixed, pointer-events none, z-50                   │
+│      → Opacity 2-3% (subtil mais visible, casse le "flat" digital)             │
+│      → Animation : re-seed aléatoire toutes les 100ms pour un                  │
+│        grain "vivant" qui scintille subtilement                                │
+│                                                                                 │
+│  12. SEO & METADATA                                                             │
+│      → generateMetadata() Next.js (title, description, OG, Twitter)            │
+│      → JSON-LD : Organization, WebApplication, FAQPage                         │
+│      → Sitemap + robots.txt                                                    │
+│                                                                                 │
+│  FICHIERS CRÉÉS :                                                               │
+│  ├── apps/web/src/app/(landing)/page.tsx        — Page SSG landing             │
+│  ├── apps/web/src/app/(landing)/layout.tsx      — Layout landing (no sidebar)  │
+│  ├── apps/web/src/components/landing/           — Répertoire composants        │
+│  │   ├── hero-section.tsx                       — Hero immersif                │
+│  │   ├── features-section.tsx                   — Narrative scroll features    │
+│  │   ├── stats-section.tsx                      — Compteurs animés + logos     │
+│  │   ├── how-it-works-section.tsx               — Timeline 3 étapes           │
+│  │   ├── faq-section.tsx                        — Accordion + JSON-LD         │
+│  │   ├── cta-section.tsx                        — CTA final                   │
+│  │   ├── footer.tsx                             — Footer premium              │
+│  │   ├── floating-nav.tsx                       — Navigation glassmorphism    │
+│  │   ├── custom-cursor.tsx                      — Curseur intelligent         │
+│  │   ├── noise-overlay.tsx                      — Grain SVG animé            │
+│  │   ├── scroll-progress.tsx                    — Barre de progression        │
+│  │   └── smooth-scroll-provider.tsx             — Provider Lenis             │
+│  ├── apps/web/src/app/page.tsx                  — Redirect logic (modifié)    │
+│  └── apps/web/src/app/globals.css               — Nouvelles classes utilitaires│
+│                                                                                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│  E5.4-P2 — LANDING PAGE : REFONTE COMPLÈTE — PERFECTION ABSOLUE               │
+│  "The Radical Upgrade"                                                          │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│  OBJECTIF : Transformer la landing P1 en une expérience de niveau Product Hunt │
+│  top-launch. Chaque pixel compte. UX irréprochable, DA radicale, contenu riche │
+│  multi-pages, navigation magistrale. Zero compromis.                            │
+│                                                                                 │
+│  ═══════════════════════════════════════════════════════════════════════════════ │
+│  A. ERGONOMIE GLOBALE — "DEZOOM" COMPLET                                       │
+│  ═══════════════════════════════════════════════════════════════════════════════ │
+│                                                                                 │
+│  Le problème P1 : tout est trop gros, sections trop espacées, pas assez        │
+│  de contenu visible dans le viewport. On perd l'utilisateur.                   │
+│                                                                                 │
+│  → Hero : réduire de min-h-screen à min-h-[85vh], titres clamp réduit         │
+│    à clamp(2rem,6vw,4rem), padding vertical réduit                             │
+│  → Features : py-24 → py-12, gap-16 → gap-10, illustrations plus petites     │
+│    max-w-md → max-w-xs, texte 3xl/4xl → 2xl/3xl                              │
+│  → Stats : py-24 → py-10, compteurs text-6xl → text-4xl                      │
+│  → HowItWorks : py-24 → py-12, spacing condensé                              │
+│  → FAQ : py-24 → py-10, max-width des questions réduit                        │
+│  → CTA : py-32 → py-16, titres réduits d'un cran                             │
+│  → Footer : padding réduit, taille texte réduite                               │
+│  → Suppression du CustomCursor (distraction, pas ergonomique)                  │
+│  → Grain background : plus artistique, plus saturé, alternant                  │
+│                                                                                 │
+│  ═══════════════════════════════════════════════════════════════════════════════ │
+│  B. NAVIGATION MAGISTRALE — MEGA DROPDOWN ANIMÉ                               │
+│  ═══════════════════════════════════════════════════════════════════════════════ │
+│                                                                                 │
+│  Remplacer le FloatingNav minimal par une Navbar fixe top permanente avec :    │
+│                                                                                 │
+│  → Logo OmniFlow à gauche (cliquable → scroll top)                            │
+│  → Liens principaux : Produit (mega dropdown) · Tarifs · Blog · À propos      │
+│  → Mega Dropdown "Produit" :                                                   │
+│    ├── Panneau gauche : 3 colonnes d'icônes+label                             │
+│    │   ├── Col 1 "Patrimoine" : Agrégation, Multi-assets, Immo, Crypto       │
+│    │   ├── Col 2 "Intelligence" : Nova IA, Budget, Fiscal, Autopilot          │
+│    │   └── Col 3 "Outils" : Retraite, Héritage, Coffre-Fort, Calendrier     │
+│    └── Panneau droit : card "highlight" avec vidéo/gif de la feature star     │
+│  → Animation dropdown : scale(0.95) + opacity 0 → scale(1) + opacity 1       │
+│    transition spring stiffness 400 damping 25, backdrop-blur-xl               │
+│  → Icônes Lucide colorées avec gradient matching feature                      │
+│  → Dark/Light mode toggle button (Sun/Moon icon, next-themes)                 │
+│  → CTAs droite : "Se connecter" ghost + "Commencer" brand button              │
+│  → Mobile : hamburger → full-screen overlay avec les mêmes items              │
+│                                                                                 │
+│  ═══════════════════════════════════════════════════════════════════════════════ │
+│  C. HERO — TYPEWRITER EFFECT + COMPACTAGE                                      │
+│  ═══════════════════════════════════════════════════════════════════════════════ │
+│                                                                                 │
+│  → Supprimer l'animation letter-by-letter (trop lente, pas lisible)           │
+│  → Ligne 1 : "Votre patrimoine." en texte statique blanc                      │
+│  → Ligne 2 : Typewriter effect cyclant entre :                                 │
+│    ["Unifié.", "Intelligent.", "Automatisé.", "Sécurisé.", "Simplifié."]       │
+│    avec curseur clignotant |, chaque mot en gradient violet→bleu              │
+│    typing speed 80ms par caractère, pause 2s, erase 40ms, boucle infinie     │
+│  → Orbe réduit à 500px max (au lieu de 800px)                                 │
+│  → Particules réduites à 5 (au lieu de 8)                                     │
+│  → Trust badges inline sous le subtitle, pas en bloc séparé                   │
+│  → Scroll indicator supprimé (pas utile, prend de la place)                   │
+│                                                                                 │
+│  ═══════════════════════════════════════════════════════════════════════════════ │
+│  D. FEATURES — VIDÉOS THÉMATIQUES + LAYOUT COMPACT                            │
+│  ═══════════════════════════════════════════════════════════════════════════════ │
+│                                                                                 │
+│  → Remplacer les SVG illustrations par des vidéos MP4/WebM thématiques :       │
+│    ├── Agrégation : vidéo dashboard finance (stock footage)                    │
+│    ├── Budget IA : vidéo AI/data analytics                                     │
+│    ├── Nova Advisor : vidéo chatbot IA                                         │
+│    ├── Crypto & Bourse : vidéo trading/marchés                                │
+│    ├── Simulateur Retraite : vidéo planning/projection                         │
+│    └── Coffre-Fort : vidéo sécurité/encryption                                │
+│  → Vidéos en autoplay, loop, muted, dans un container rounded-xl avec         │
+│    overlay gradient noir 40% pour lisibilité texte                             │
+│  → Layout : grid 2 colonnes sur desktop au lieu d'alternance,                 │
+│    plus compact, cards avec border subtle                                       │
+│  → Texte réduit : titres 2xl, descriptions text-sm, tags plus petits          │
+│                                                                                 │
+│  ═══════════════════════════════════════════════════════════════════════════════ │
+│  E. NOUVELLE SECTION — TESTIMONIALS                                            │
+│  ═══════════════════════════════════════════════════════════════════════════════ │
+│                                                                                 │
+│  → Section "Ce que nos utilisateurs disent" entre Stats et HowItWorks         │
+│  → Carousel horizontal animé (Framer Motion drag + snap)                      │
+│  → 6 témoignages fictifs mais réalistes :                                     │
+│    - Alexandre D. (Entrepreneur) — agrégation patrimoine                       │
+│    - Marie L. (Investisseuse) — Nova IA                                        │
+│    - Thomas B. (Freelance) — budget intelligent                                │
+│    - Sophie R. (Retraitée) — simulateur retraite                              │
+│    - Julien M. (Crypto trader) — multi-assets                                  │
+│    - Camille P. (Famille) — coffre-fort digital                               │
+│  → Chaque card : avatar initials coloré, étoiles ★★★★★, quote italique       │
+│    nom + titre, date relative                                                   │
+│  → Animation : cards slide-in stagger, parallax léger sur scroll              │
+│  → Note moyenne "4.9/5 basé sur 2,400+ avis" au-dessus du carousel           │
+│                                                                                 │
+│  ═══════════════════════════════════════════════════════════════════════════════ │
+│  F. GRAIN BACKGROUND ARTISTIQUE                                                │
+│  ═══════════════════════════════════════════════════════════════════════════════ │
+│                                                                                 │
+│  → NoiseOverlay repensé : grain beaucoup plus visible (opacity 6-8%)          │
+│  → baseFrequency augmenté à 0.8 pour grain plus fin et dense                  │
+│  → Couleur du grain : alternance entre violet saturé et neutre                 │
+│    via un gradient overlay animé (hue-rotate keyframes)                        │
+│  → Sections alternent entre grain fort (hero, CTA) et grain léger             │
+│    (features, FAQ) pour créer du rythme visuel                                 │
+│  → Animated seed change every 150ms pour effet scintillement vivant           │
+│                                                                                 │
+│  ═══════════════════════════════════════════════════════════════════════════════ │
+│  G. NOUVELLES PAGES + ROUTING                                                  │
+│  ═══════════════════════════════════════════════════════════════════════════════ │
+│                                                                                 │
+│  Créer 3 pages marketing statiques liées depuis la navbar :                   │
+│                                                                                 │
+│  → /pricing — Page tarification                                                │
+│    ├── Comparaison Free vs Pro (feature matrix)                               │
+│    ├── Toggle mensuel/annuel avec animation slide                              │
+│    ├── "Gratuit pendant la beta" badge prominent                              │
+│    └── FAQ pricing inline                                                      │
+│                                                                                 │
+│  → /about — Page à propos                                                     │
+│    ├── Mission OmniFlow (texte narrative)                                      │
+│    ├── Valeurs (4 cards : Transparence, Sécurité, Innovation, Open Source)    │
+│    ├── Tech Stack visual (logos des technologies)                              │
+│    └── CTA rejoindre la beta                                                   │
+│                                                                                 │
+│  → /blog — Page blog (statique, placeholder)                                  │
+│    ├── 3 articles fictifs avec thumbnails                                      │
+│    ├── Tags catégories                                                         │
+│    └── Layout magazine 2 colonnes                                              │
+│                                                                                 │
+│  ═══════════════════════════════════════════════════════════════════════════════ │
+│  H. DARK/LIGHT MODE                                                            │
+│  ═══════════════════════════════════════════════════════════════════════════════ │
+│                                                                                 │
+│  → Bouton toggle dans la navbar (Sun/Moon icône Lucide)                       │
+│  → Transition fluide 300ms sur toutes les couleurs                            │
+│  → Landing page supporte les deux modes :                                      │
+│    ├── Dark : fond noir OLED, texte blanc, grain violet                       │
+│    └── Light : fond blanc crème, texte noir, grain bleu-gris léger           │
+│  → Toutes les sections adaptées (backgrounds, borders, text colors)           │
+│  → next-themes déjà installé, juste besoin d'adapter les composants          │
+│                                                                                 │
+│  ═══════════════════════════════════════════════════════════════════════════════ │
+│  I. AMÉLIORATIONS EXISTANTES                                                   │
+│  ═══════════════════════════════════════════════════════════════════════════════ │
+│                                                                                 │
+│  → Stats section : layout horizontal inline, plus compact                      │
+│  → HowItWorks : timeline plus serrée, icônes plus petites                     │
+│  → FAQ : accordéon plus compact, texte plus petit                             │
+│  → CTA : section plus courte, bouton plus proéminent                          │
+│  → Footer : 3 colonnes au lieu de 4, espacement réduit                        │
+│  → ScrollProgress : conservé (subtle, utile)                                   │
+│  → SmoothScroll : conservé (Lenis)                                             │
+│                                                                                 │
+│  ═══════════════════════════════════════════════════════════════════════════════ │
+│  FICHIERS IMPACTÉS                                                             │
+│  ═══════════════════════════════════════════════════════════════════════════════ │
+│                                                                                 │
+│  MODIFIÉS :                                                                    │
+│  ├── page.tsx (root) — Retrait CustomCursor, ajout Testimonials               │
+│  ├── hero-section.tsx — Typewriter, compactage, suppression letter-reveal      │
+│  ├── features-section.tsx — Vidéos, grid compact, cards border                │
+│  ├── stats-section.tsx — Layout inline compact                                 │
+│  ├── how-it-works-section.tsx — Timeline serrée                               │
+│  ├── faq-section.tsx — Compact                                                │
+│  ├── cta-section.tsx — Section courte                                          │
+│  ├── footer.tsx — 3 colonnes, compact                                          │
+│  ├── noise-overlay.tsx — Grain artistique saturé                              │
+│  ├── globals.css — Nouvelles animations, dark/light variables landing         │
+│  └── index.ts (barrel) — Ajout Testimonials, retrait CustomCursor             │
+│                                                                                 │
+│  CRÉÉS :                                                                       │
+│  ├── components/landing/navbar.tsx — Mega dropdown nav                        │
+│  ├── components/landing/testimonials-section.tsx — Carousel témoignages       │
+│  ├── app/(marketing)/pricing/page.tsx — Page tarification                     │
+│  ├── app/(marketing)/about/page.tsx — Page à propos                           │
+│  ├── app/(marketing)/blog/page.tsx — Page blog                                │
+│  └── app/(marketing)/layout.tsx — Layout marketing (navbar+footer)            │
+│                                                                                 │
+│  SUPPRIMÉS :                                                                   │
+│  ├── components/landing/custom-cursor.tsx — Supprimé (distraction)            │
+│  └── components/landing/floating-nav.tsx — Remplacé par navbar.tsx            │
+│                                                                                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 **E5.5 — Observabilité & Error Tracking**
