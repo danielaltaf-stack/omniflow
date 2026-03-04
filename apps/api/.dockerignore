@@ -62,4 +62,3 @@ alembic/__pycache__/
 # Misc
 Makefile
 *.sql
-patch_cragr.py
