@@ -53,92 +53,40 @@
 
 ---
 
-## Étape 1 — Créer le dépôt GitHub
+## Étape 1 — Créer le dépôt GitHub ✅ FAIT
 
-Le repo git est déjà initialisé. Il faut maintenant le connecter à GitHub.
+Le code est déjà pushé sur GitHub : **https://github.com/danielaltaf-stack/omniflow**
 
-### 1.1 Créer le repo sur GitHub
+> **Vérification** : Va sur https://github.com/danielaltaf-stack/omniflow — tu dois voir tout le code (457 fichiers, Python 52.5% + TypeScript 46.2%).
 
-1. Va sur **https://github.com/new**
-2. Repository name : `omniflow` (ou le nom que tu veux)
-3. Visibility : **Private** (recommandé — contient ton code source)
-4. **NE COCHE PAS** "Add a README" ni ".gitignore" (on a déjà tout)
-5. Click **Create repository**
+---
 
-### 1.2 Push le code
+## Étape 2 — Base de données (Neon PostgreSQL) ✅ FAIT
 
-Ouvre un terminal PowerShell dans le dossier du projet :
+Neon est déjà créé. Voici l'URL convertie pour l'app :
 
-```powershell
-cd "c:\Users\altaf\OneDrive\Documents\Omniflow-woob"
-
-# Ajouter le remote (remplace TON_USER par ton username GitHub)
-git remote add origin https://github.com/TON_USER/omniflow.git
-
-# Premier commit
-git add .
-git commit -m "feat: OmniFlow v0.5.0 — full-stack FinTech app"
-
-# Push
-git push -u origin main
+```
+postgresql+asyncpg://neondb_owner:npg_f06oAsBkGmXL@ep-hidden-fire-agkq2kay-pooler.c-2.eu-central-1.aws.neon.tech/neondb?sslmode=require
 ```
 
-> **Vérification** : Va sur `https://github.com/TON_USER/omniflow` — tu dois voir tout le code.
+> **Note** : Le préfixe a été converti de `postgresql://` en `postgresql+asyncpg://` et `channel_binding=require` a été retiré (non supporté par asyncpg). C'est cette URL qu'il faut mettre dans `DATABASE_URL` sur Render.
 
 ---
 
-## Étape 2 — Créer la base de données (Neon PostgreSQL)
+## Étape 3 — Récupérer le cache Redis (Upstash) ⚠️ ACTION REQUISE
 
-### 2.1 Créer le compte
+Upstash est déjà créé (host : `vast-koala-21919.upstash.io`), mais tu m'as donné l'URL **REST API**. L'app a besoin de l'URL **Redis Protocol**.
 
-1. Va sur **https://neon.tech**
-2. Click **Sign Up** → utilise ton compte GitHub (plus rapide)
-3. Accepte les conditions
+### Ce que tu dois faire :
 
-### 2.2 Créer le projet
+1. Va sur **https://console.upstash.com** → clique sur ta database `vast-koala-21919`
+2. Dans l'onglet **Details**, cherche la section **Redis Connection**
+3. Tu verras 2 types de connexion :
+   - **REST API** (ce que tu m'as donné) : `https://vast-koala-21919.upstash.io`
+   - **Redis Protocol** (ce qu'il faut) : `rediss://default:xxxxx@vast-koala-21919.upstash.io:6379`
+4. **Copie l'URL Redis Protocol** — elle commence par `rediss://` (avec 2 s = TLS)
 
-1. Click **Create Project**
-2. **Project name** : `omniflow`
-3. **Region** : `EU (Frankfurt)` — `eu-central-1`
-4. **PostgreSQL version** : `16`
-5. Click **Create Project**
-
-### 2.3 Récupérer la connection string
-
-1. Sur la page du projet, tu vois **Connection Details**
-2. Sélectionne le mode **Direct Connection**
-3. Copie la connection string
-4. **IMPORTANT** : Modifie le préfixe :
-   - Neon donne : `postgres://neondb_owner:xxxxx@ep-cool-xxx.eu-central-1.aws.neon.tech/neondb?sslmode=require`
-   - Tu dois changer en : `postgresql+asyncpg://neondb_owner:xxxxx@ep-cool-xxx.eu-central-1.aws.neon.tech/neondb?sslmode=require`
-   - (Remplace `postgres://` par `postgresql+asyncpg://`)
-
-> **Garde cette URL** — tu en auras besoin à l'étape 5.
-
----
-
-## Étape 3 — Créer le cache Redis (Upstash)
-
-### 3.1 Créer le compte
-
-1. Va sur **https://upstash.com**
-2. Click **Sign Up** → utilise ton compte GitHub
-
-### 3.2 Créer la database Redis
-
-1. Click **Create Database**
-2. **Name** : `omniflow-redis`
-3. **Region** : `EU-West-1 (Ireland)` (le plus proche de Frankfurt)
-4. **TLS** : Enabled (par défaut)
-5. Click **Create**
-
-### 3.3 Récupérer l'URL Redis
-
-1. Sur la page de la database, va dans l'onglet **Details**
-2. Copie la **Redis URL** (format `rediss://default:xxxxx@eu1-xxx.upstash.io:6379`)
-3. **Vérifie** que ça commence par `rediss://` (avec 2 s = TLS activé)
-
-> **Garde cette URL** — tu en auras besoin à l'étape 5.
+> **C'est cette URL `rediss://...` qu'il faut mettre dans `REDIS_URL` sur Render à l'étape 5.**
 
 ---
 
@@ -182,7 +130,7 @@ git push -u origin main
 ### 5.2 Créer le Web Service
 
 1. Click **New** → **Web Service**
-2. **Connect Repository** → sélectionne `omniflow`
+2. **Connect Repository** → sélectionne `danielaltaf-stack/omniflow`
 3. Configure :
    - **Name** : `omniflow-api`
    - **Region** : `Frankfurt (EU Central)`
@@ -201,39 +149,36 @@ Dans le dashboard Render du service `omniflow-api`, va dans **Environment** → 
 | `DEBUG` | `false` |
 | `LOG_LEVEL` | `WARNING` |
 | `LAUNCH_MODE` | `beta` |
-| `DATABASE_URL` | `postgresql+asyncpg://...` (ton URL Neon de l'étape 2) |
+| `DATABASE_URL` | `postgresql+asyncpg://neondb_owner:npg_f06oAsBkGmXL@ep-hidden-fire-agkq2kay-pooler.c-2.eu-central-1.aws.neon.tech/neondb?sslmode=require` |
 | `DB_POOL_SIZE` | `5` |
 | `DB_MAX_OVERFLOW` | `10` |
 | `DB_POOL_RECYCLE` | `300` |
-| `REDIS_URL` | `rediss://...` (ton URL Upstash de l'étape 3) |
+| `REDIS_URL` | `rediss://default:xxxxx@vast-koala-21919.upstash.io:6379` ← **REMPLACE xxxxx par ton password Redis (étape 3)** |
 | `REDIS_MAX_CONNECTIONS` | `10` |
-| `SECRET_KEY` | *(voir ci-dessous)* |
-| `ENCRYPTION_KEY` | *(voir ci-dessous)* |
+| `SECRET_KEY` | `3ab7fec5fb37a17f8a7e36d6736c1cbb4b81c49d27b141b9068d62144baca9a79bd687a0033fb5679a62e3c1526a51bc2daf109ca90f165f2f7e29fe9b1b3e83` |
+| `ENCRYPTION_KEY` | `4189683dec0113ac76b9ef62e97329b5fb6a2f2b86a111cfb859c71559f5222c` |
 | `JWT_ALGORITHM` | `HS256` |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | `30` |
 | `BCRYPT_ROUNDS` | `13` |
-| `ALLOWED_ORIGINS` | `["https://omniflow-web.vercel.app"]` |
+| `ALLOWED_ORIGINS` | `["https://omniflow-web.vercel.app","https://omniflow-danielaltaf-stacks-projects.vercel.app"]` |
 | `WEB_CONCURRENCY` | `2` |
 | `RATE_LIMIT_PER_MINUTE` | `60` |
-| `OPENAI_API_KEY` | *(ta clé OpenAI, ou laisse vide pour désactiver l'IA)* |
+| `OPENAI_API_KEY` | *(ta clé OpenAI de ton .env local, ou laisse vide pour désactiver l'IA)* |
 | `OPENAI_MODEL` | `gpt-4o-mini` |
 | `AI_DAILY_LIMIT` | `20` |
-| `SENTRY_DSN` | *(ton DSN backend de l'étape 4, ou laisse vide)* |
+| `SENTRY_DSN` | *(laisse vide — Sentry est optionnel et l'app marchera sans)* |
 | `SENTRY_ENVIRONMENT` | `production` |
 
-### 5.4 Générer SECRET_KEY et ENCRYPTION_KEY
+### 5.4 Clés de sécurité ✅ GÉNÉRÉES
 
-Ouvre un terminal PowerShell et exécute :
+Les clés ont déjà été générées. Utilise-les dans Render :
 
-```powershell
-# SECRET_KEY (64 caractères hex — obligatoire, sinon le backend refuse de démarrer)
-python -c "import secrets; print(secrets.token_hex(64))"
-
-# ENCRYPTION_KEY (32 caractères hex — obligatoire)
-python -c "import secrets; print(secrets.token_hex(32))"
+```
+SECRET_KEY=3ab7fec5fb37a17f8a7e36d6736c1cbb4b81c49d27b141b9068d62144baca9a79bd687a0033fb5679a62e3c1526a51bc2daf109ca90f165f2f7e29fe9b1b3e83
+ENCRYPTION_KEY=4189683dec0113ac76b9ef62e97329b5fb6a2f2b86a111cfb859c71559f5222c
 ```
 
-Copie les résultats dans les variables Render correspondantes.
+> **IMPORTANT** : Ces clés sont uniques et irremplaçables. Si tu les perds, les données chiffrées en base seront irrécupérables. Note-les quelque part de sûr.
 
 ### 5.5 Lancer le déploiement
 
@@ -273,7 +218,7 @@ Les migrations Alembic doivent être exécutées une fois. Dans Render Dashboard
 ### 6.2 Importer le projet
 
 1. Click **Add New...** → **Project**
-2. **Import Git Repository** → sélectionne `omniflow`
+2. **Import Git Repository** → sélectionne `danielaltaf-stack/omniflow`
 3. Configure :
    - **Framework Preset** : `Next.js` (auto-détecté grâce au `vercel.json`)
    - **Root Directory** : `apps/web` ← IMPORTANT, click **Edit** et tape `apps/web`
@@ -289,7 +234,7 @@ Avant de déployer, ajoute ces variables dans la section **Environment Variables
 | `NEXT_PUBLIC_API_URL` | `https://omniflow-api.onrender.com` (ton URL Render de l'étape 5.5) |
 | `NEXT_PUBLIC_APP_URL` | `https://omniflow-web.vercel.app` (sera mis à jour après deploy) |
 | `NEXT_PUBLIC_APP_VERSION` | `0.5.0` |
-| `NEXT_PUBLIC_SENTRY_DSN` | *(ton DSN frontend de l'étape 4, ou laisse vide)* |
+| `NEXT_PUBLIC_SENTRY_DSN` | *(laisse vide — l'app marchera parfaitement sans)* |
 | `NEXT_PUBLIC_SENTRY_ENVIRONMENT` | `production` |
 
 ### 6.4 Déployer
@@ -416,14 +361,14 @@ fetch('https://omniflow-api.onrender.com/health/live')
 Une fois tout déployé, note ces informations :
 
 ```
-📦 GitHub Repo     : https://github.com/TON_USER/omniflow
-🌐 Frontend        : https://omniflow-web.vercel.app
-⚡ Backend API     : https://omniflow-api.onrender.com
+📦 GitHub Repo     : https://github.com/danielaltaf-stack/omniflow
+🌐 Frontend        : https://omniflow-web.vercel.app (ou URL Vercel attribuée)
+⚡ Backend API     : https://omniflow-api.onrender.com (ou URL Render attribuée)
 📊 API Docs        : https://omniflow-api.onrender.com/docs
 🐘 Database        : Neon (eu-central-1) — console.neon.tech
-🔴 Redis           : Upstash — console.upstash.com
-🐛 Error Tracking  : Sentry — sentry.io
-🔄 CI/CD           : GitHub Actions — github.com/TON_USER/omniflow/actions
+🔴 Redis           : Upstash (vast-koala-21919) — console.upstash.com
+🐛 Error Tracking  : Sentry (optionnel) — sentry.io
+🔄 CI/CD           : GitHub Actions — github.com/danielaltaf-stack/omniflow/actions
 ```
 
 ---
@@ -487,13 +432,13 @@ git push origin main
 
 ## Checklist rapide
 
-- [ ] GitHub repo créé et code pushé
-- [ ] Neon PostgreSQL créé (eu-central-1) — `DATABASE_URL` copiée
-- [ ] Upstash Redis créé (eu-west-1) — `REDIS_URL` copiée
-- [ ] Sentry projets créés (optionnel) — 2 DSN copiés
-- [ ] Render Web Service créé — toutes les env vars ajoutées — `SECRET_KEY` et `ENCRYPTION_KEY` générées
-- [ ] Migrations Alembic exécutées (via Render Shell)
+- [x] GitHub repo créé et code pushé → https://github.com/danielaltaf-stack/omniflow
+- [x] Neon PostgreSQL créé (eu-central-1) — `DATABASE_URL` prête
+- [x] Clés de sécurité générées (`SECRET_KEY` + `ENCRYPTION_KEY`)
+- [ ] **Upstash Redis** — récupérer l'URL **Redis Protocol** `rediss://...` (pas l'URL REST) → étape 3
+- [ ] **Render** Web Service créé — toutes les env vars ajoutées → étape 5
+- [ ] **Migrations Alembic** exécutées via Render Shell → étape 5.7
 - [ ] Backend accessible : `/health/live` retourne `{"status": "ok"}`
-- [ ] Vercel projet créé — root directory `apps/web` — env vars ajoutées
+- [ ] **Vercel** projet créé — root directory `apps/web` — env vars ajoutées → étape 6
 - [ ] Frontend accessible et connecté au backend
-- [ ] CORS vérifié (pas d'erreur dans la console)
+- [ ] CORS vérifié (pas d'erreur dans la console F12)
