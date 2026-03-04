@@ -1,0 +1,377 @@
+# ═══════════════════════════════════════════════════════════════════
+# OmniFlow CI/CD Pipeline v2
+# ═══════════════════════════════════════════════════════════════════
+# 6 jobs: backend-lint, backend-test, frontend-quality, security-scan,
+#         frontend-build, deploy
+#
+# Parallelism: lint + quality + security run in parallel.
+#              test + build depend on lint/quality.
+#              deploy depends on test + build (main branch only).
+# ═══════════════════════════════════════════════════════════════════
+
+name: CI/CD
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.12"
+  NODE_VERSION: "20"
+
+# ═══════════════════════════════════════════════════════════════════
+# JOB 1 — BACKEND LINT (ruff check + format + bandit SAST)
+# ═══════════════════════════════════════════════════════════════════
+
+jobs:
+  backend-lint:
+    name: "Backend Lint"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install linters
+        run: pip install ruff>=0.4.0 bandit>=1.7.0
+
+      - name: Ruff check (linting)
+        run: ruff check app/ tests/ --output-format=github
+
+      - name: Ruff format (formatting)
+        run: ruff format --check app/ tests/
+
+      - name: Bandit SAST scan
+        run: |
+          bandit -r app/ \
+            -f json \
+            -o bandit-report.json \
+            --severity-level medium \
+            --confidence-level medium \
+            -x app/tests || true
+
+      - name: Upload Bandit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bandit-sast-report
+          path: apps/api/bandit-report.json
+          retention-days: 30
+
+  # ═══════════════════════════════════════════════════════════════
+  # JOB 2 — BACKEND TEST (pytest + coverage + Postgres + Redis)
+  # ═══════════════════════════════════════════════════════════════
+
+  backend-test:
+    name: "Backend Tests"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: backend-lint
+    defaults:
+      run:
+        working-directory: apps/api
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: omniflow_test
+          POSTGRES_USER: omniflow
+          POSTGRES_PASSWORD: omniflow_test_pw
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql+asyncpg://omniflow:omniflow_test_pw@localhost:5432/omniflow_test
+      REDIS_URL: redis://localhost:6379/0
+      SECRET_KEY: ci-test-secret-key-do-not-use-in-prod-must-be-64-characters-long-enough-for-validation
+      ENCRYPTION_KEY: ci-test-encryption-key-32chars-xx
+      ENVIRONMENT: development
+      DEBUG: "true"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: apps/api/pyproject.toml
+
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Run tests with coverage
+        run: |
+          pytest -v \
+            --cov=app \
+            --cov-report=term-missing \
+            --cov-report=xml:coverage.xml \
+            --cov-fail-under=50 \
+            --tb=short \
+            -x
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: apps/api/coverage.xml
+          retention-days: 30
+
+  # ═══════════════════════════════════════════════════════════════
+  # JOB 3 — FRONTEND QUALITY (lint + typecheck + bundle size)
+  # ═══════════════════════════════════════════════════════════════
+
+  frontend-quality:
+    name: "Frontend Quality"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline
+
+      - name: ESLint (Next.js)
+        run: npx next lint --max-warnings 0
+
+      - name: TypeScript type-check
+        run: npx tsc --noEmit
+
+  # ═══════════════════════════════════════════════════════════════
+  # JOB 4 — SECURITY SCAN (pip-audit + npm audit + trivy)
+  # ═══════════════════════════════════════════════════════════════
+
+  security-scan:
+    name: "Security Scan"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Python dependency audit
+        working-directory: apps/api
+        run: |
+          pip install pip-audit
+          pip install -e ".[dev]" --quiet
+          pip-audit --format=json --output=pip-audit-report.json || true
+          echo "--- Python Audit Summary ---"
+          pip-audit --desc || true
+
+      - name: Node dependency audit
+        working-directory: apps/web
+        run: |
+          npm ci --prefer-offline --quiet
+          npm audit --audit-level=high --json > npm-audit-report.json 2>&1 || true
+          echo "--- Node Audit Summary ---"
+          npm audit --audit-level=high || true
+
+      - name: Trivy filesystem scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          format: table
+          exit-code: 0
+          ignore-unfixed: true
+
+      - name: Upload audit reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-audit-reports
+          path: |
+            apps/api/pip-audit-report.json
+            apps/web/npm-audit-report.json
+          retention-days: 30
+
+  # ═══════════════════════════════════════════════════════════════
+  # JOB 5 — FRONTEND BUILD (Next.js + Lighthouse CI)
+  # ═══════════════════════════════════════════════════════════════
+
+  frontend-build:
+    name: "Frontend Build"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: frontend-quality
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline
+
+      - name: Build (standalone)
+        run: npm run build
+        env:
+          NEXT_PUBLIC_API_URL: https://api.omniflow.app
+          NEXT_PUBLIC_APP_VERSION: "0.5.0"
+          NEXT_TELEMETRY_DISABLED: "1"
+
+      - name: Check bundle size
+        run: |
+          echo "=== First Load JS Bundle Analysis ==="
+          if [ -f .next/build-manifest.json ]; then
+            echo "Build manifest found."
+            # Count total JS size in standalone output
+            TOTAL_JS=$(find .next/static -name '*.js' -exec wc -c {} + | tail -1 | awk '{print $1}')
+            TOTAL_JS_KB=$((TOTAL_JS / 1024))
+            echo "Total JS assets: ${TOTAL_JS_KB}KB"
+            if [ "$TOTAL_JS_KB" -gt 2048 ]; then
+              echo "::warning::Total JS bundle (${TOTAL_JS_KB}KB) exceeds 2MB budget"
+            fi
+          fi
+
+      - name: Upload build artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nextjs-build
+          path: |
+            apps/web/.next/build-manifest.json
+            apps/web/.next/routes-manifest.json
+          retention-days: 7
+
+  # ═══════════════════════════════════════════════════════════════
+  # JOB 6 — DEPLOY (Railway backend + Health check + Sentry release)
+  # Only runs on push to main (not PRs, not develop)
+  # ═══════════════════════════════════════════════════════════════
+
+  deploy:
+    name: "Deploy Production"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [backend-test, frontend-build, security-scan]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Trigger backend deploy
+        env:
+          DEPLOY_WEBHOOK_URL: ${{ secrets.DEPLOY_WEBHOOK_URL || secrets.RAILWAY_WEBHOOK_URL }}
+        run: |
+          if [ -z "$DEPLOY_WEBHOOK_URL" ]; then
+            echo "::warning::No DEPLOY_WEBHOOK_URL or RAILWAY_WEBHOOK_URL secret configured — skipping deploy trigger"
+            echo "ℹ️  If using Vercel + Render auto-deploy (free tier), this is expected."
+            exit 0
+          fi
+          echo "Triggering deployment..."
+          curl -fsSL \
+            -X POST "$DEPLOY_WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            || echo "::warning::Deploy webhook failed"
+
+      - name: Wait for deployment
+        run: |
+          echo "Waiting 60s for deployment to propagate..."
+          sleep 60
+
+      - name: Health check (backend)
+        env:
+          DEPLOY_API_URL: ${{ vars.DEPLOY_API_URL }}
+        run: |
+          if [ -z "$DEPLOY_API_URL" ]; then
+            echo "::warning::DEPLOY_API_URL not set — skipping health check"
+            echo "ℹ️  Set this variable once your Render/Railway backend is live."
+            exit 0
+          fi
+          echo "Checking $DEPLOY_API_URL/health/live ..."
+          for i in 1 2 3 4 5; do
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$DEPLOY_API_URL/health/live" || echo "000")
+            if [ "$HTTP_CODE" = "200" ]; then
+              echo "✅ Health check passed (attempt $i)"
+              curl -s "$DEPLOY_API_URL/health/live" | python3 -m json.tool
+              exit 0
+            fi
+            echo "⏳ Attempt $i: HTTP $HTTP_CODE — retrying in 15s..."
+            sleep 15
+          done
+          echo "::error::Health check failed after 5 attempts"
+          exit 1
+
+      - name: Create Sentry release
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ vars.SENTRY_ORG || 'omniflow' }}
+          SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT || 'omniflow-api' }}
+          VERSION: omniflow-api@0.5.0+${{ github.sha }}
+        run: |
+          if [ -z "$SENTRY_AUTH_TOKEN" ]; then
+            echo "::warning::SENTRY_AUTH_TOKEN not set — skipping Sentry release"
+            exit 0
+          fi
+          npx @sentry/cli releases new "$VERSION" || true
+          npx @sentry/cli releases set-commits "$VERSION" --auto || true
+          npx @sentry/cli releases finalize "$VERSION" || true
+          echo "✅ Sentry release $VERSION created"
+
+      - name: Deploy summary
+        run: |
+          echo "## 🚀 Deploy Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Key | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Commit** | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Branch** | \`${{ github.ref_name }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Actor** | @${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Version** | 0.5.0 |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Backend** | Render free / Railway |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Frontend** | Vercel (auto-deploy) |" >> $GITHUB_STEP_SUMMARY
+

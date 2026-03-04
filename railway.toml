@@ -1,0 +1,36 @@
+# ═══════════════════════════════════════════════════════════════════
+# OmniFlow — Railway Deployment Configuration
+#
+# This file configures Railway's build and deploy behavior.
+# Docs: https://docs.railway.app/reference/config-as-code
+# ═══════════════════════════════════════════════════════════════════
+
+[build]
+# Use the multi-stage Dockerfile (builder → woob → runtime)
+builder = "dockerfile"
+dockerfilePath = "apps/api/Dockerfile"
+
+# Build context is the repo root (Railway clones full repo)
+# But Dockerfile COPY commands are relative to apps/api/
+watchPaths = ["apps/api/**"]
+
+[deploy]
+# Start command (matches Dockerfile CMD)
+startCommand = "gunicorn app.main:app -c gunicorn.conf.py"
+
+# Health check — Railway pings this before switching traffic
+healthcheckPath = "/health/live"
+healthcheckTimeout = 10
+
+# Restart policy
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 5
+
+# Replicas (1 on free tier, scale to 3 on Pro)
+numReplicas = 1
+
+# Release command — run Alembic migrations BEFORE traffic switch
+# This ensures zero-downtime: old container serves traffic while
+# new container runs migrations, then traffic switches.
+[deploy.releaseCommand]
+command = "cd /app && alembic upgrade head"

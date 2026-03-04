@@ -1,0 +1,72 @@
+# ── Stage 1: Dependencies ──────────────────────────────────────
+FROM node:20-alpine AS deps
+WORKDIR /app
+
+# Install dependencies only when package files change
+COPY package.json package-lock.json* ./
+RUN npm ci --prefer-offline --no-audit --no-fund
+
+# ── Stage 2: Builder ──────────────────────────────────────────
+FROM node:20-alpine AS builder
+WORKDIR /app
+
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+
+# Build arguments for environment variables baked into the build
+ARG NEXT_PUBLIC_API_URL=https://api.omniflow.app
+ARG NEXT_PUBLIC_APP_URL=https://omniflow.app
+ARG NEXT_PUBLIC_APP_VERSION=0.5.0
+ARG NEXT_PUBLIC_SENTRY_DSN=
+ARG NEXT_PUBLIC_SENTRY_ENVIRONMENT=production
+ARG NEXT_PUBLIC_PLAUSIBLE_DOMAIN=omniflow.app
+ARG NEXT_PUBLIC_BUILD_ID=
+
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL \
+    NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL \
+    NEXT_PUBLIC_APP_VERSION=$NEXT_PUBLIC_APP_VERSION \
+    NEXT_PUBLIC_SENTRY_DSN=$NEXT_PUBLIC_SENTRY_DSN \
+    NEXT_PUBLIC_SENTRY_ENVIRONMENT=$NEXT_PUBLIC_SENTRY_ENVIRONMENT \
+    NEXT_PUBLIC_PLAUSIBLE_DOMAIN=$NEXT_PUBLIC_PLAUSIBLE_DOMAIN \
+    NEXT_PUBLIC_BUILD_ID=$NEXT_PUBLIC_BUILD_ID \
+    NEXT_TELEMETRY_DISABLED=1
+
+RUN npm run build
+
+# ── Stage 3: Runner (Production) ──────────────────────────────
+FROM node:20-alpine AS runner
+
+LABEL maintainer="CTO Office <cto@omniflow.app>"
+LABEL org.opencontainers.image.description="OmniFlow Web — Next.js Frontend"
+
+WORKDIR /app
+
+ENV NODE_ENV=production \
+    NEXT_TELEMETRY_DISABLED=1 \
+    HOSTNAME="0.0.0.0" \
+    PORT=3000
+
+# Install curl for health checks, tini for signal handling
+RUN apk add --no-cache curl tini
+
+# Create non-root user
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 nextjs
+
+# Copy standalone output (includes server.js + minimal node_modules)
+COPY --from=builder /app/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+
+USER nextjs
+
+EXPOSE 3000
+
+# Health check compatible with Railway and Kubernetes
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD curl -f http://localhost:3000/ || exit 1
+
+# Use tini as PID 1 for proper signal handling (graceful shutdown)
+ENTRYPOINT ["tini", "--"]
+
+CMD ["node", "server.js"]

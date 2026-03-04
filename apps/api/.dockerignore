@@ -1,0 +1,65 @@
+# OmniFlow API — Docker build context exclusions
+# Reduces build context size and prevents leaking sensitive files
+
+# Python caches
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+*.egg
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Git
+.git/
+.gitignore
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Tests (not needed in production image)
+tests/
+htmlcov/
+.coverage
+coverage.xml
+
+# Documentation
+*.md
+LICENSE
+docs/
+
+# Build artifacts
+dist/
+build/
+
+# Docker
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Alembic cache
+alembic/versions/__pycache__/
+alembic/__pycache__/
+
+# Misc
+Makefile
+*.sql
+patch_cragr.py
