@@ -73,20 +73,15 @@ postgresql+asyncpg://neondb_owner:npg_f06oAsBkGmXL@ep-hidden-fire-agkq2kay-poole
 
 ---
 
-## Étape 3 — Récupérer le cache Redis (Upstash) ⚠️ ACTION REQUISE
+## Étape 3 — Cache Redis (Upstash) ✅ FAIT
 
-Upstash est déjà créé (host : `vast-koala-21919.upstash.io`), mais tu m'as donné l'URL **REST API**. L'app a besoin de l'URL **Redis Protocol**.
+Upstash configuré : `vast-koala-21919.upstash.io` (TLS, free tier).
 
-### Ce que tu dois faire :
+```
+REDIS_URL=rediss://default:AVWfAAIncDI0NDAyNmNmMGNkZTA0MzhhOTBkMmYyNzgxZmNmODljZXAyMjE5MTk@vast-koala-21919.upstash.io:6379
+```
 
-1. Va sur **https://console.upstash.com** → clique sur ta database `vast-koala-21919`
-2. Dans l'onglet **Details**, cherche la section **Redis Connection**
-3. Tu verras 2 types de connexion :
-   - **REST API** (ce que tu m'as donné) : `https://vast-koala-21919.upstash.io`
-   - **Redis Protocol** (ce qu'il faut) : `rediss://default:xxxxx@vast-koala-21919.upstash.io:6379`
-4. **Copie l'URL Redis Protocol** — elle commence par `rediss://` (avec 2 s = TLS)
-
-> **C'est cette URL `rediss://...` qu'il faut mettre dans `REDIS_URL` sur Render à l'étape 5.**
+> Déjà pré-rempli dans le `.env`. Rien à faire ici.
 
 ---
 
@@ -153,7 +148,7 @@ Dans le dashboard Render du service `omniflow-api`, va dans **Environment** → 
 | `DB_POOL_SIZE` | `5` |
 | `DB_MAX_OVERFLOW` | `10` |
 | `DB_POOL_RECYCLE` | `300` |
-| `REDIS_URL` | `rediss://default:xxxxx@vast-koala-21919.upstash.io:6379` ← **REMPLACE xxxxx par ton password Redis (étape 3)** |
+| `REDIS_URL` | `rediss://default:AVWfAAIncDI0NDAyNmNmMGNkZTA0MzhhOTBkMmYyNzgxZmNmODljZXAyMjE5MTk@vast-koala-21919.upstash.io:6379` |
 | `REDIS_MAX_CONNECTIONS` | `10` |
 | `SECRET_KEY` | `3ab7fec5fb37a17f8a7e36d6736c1cbb4b81c49d27b141b9068d62144baca9a79bd687a0033fb5679a62e3c1526a51bc2daf109ca90f165f2f7e29fe9b1b3e83` |
 | `ENCRYPTION_KEY` | `4189683dec0113ac76b9ef62e97329b5fb6a2f2b86a111cfb859c71559f5222c` |
@@ -163,7 +158,8 @@ Dans le dashboard Render du service `omniflow-api`, va dans **Environment** → 
 | `ALLOWED_ORIGINS` | `["https://omniflow-web.vercel.app","https://omniflow-danielaltaf-stacks-projects.vercel.app"]` |
 | `WEB_CONCURRENCY` | `2` |
 | `RATE_LIMIT_PER_MINUTE` | `60` |
-| `OPENAI_API_KEY` | *(ta clé OpenAI de ton .env local, ou laisse vide pour désactiver l'IA)* |
+| `AI_PROVIDERS` | *(copie la valeur depuis ton fichier `.env` local — contient tes clés Groq + Gemini)* |
+| `OPENAI_API_KEY` | *(copie depuis ton `.env` local — ta clé OpenAI `sk-proj-...`)* |
 | `OPENAI_MODEL` | `gpt-4o-mini` |
 | `AI_DAILY_LIMIT` | `20` |
 | `SENTRY_DSN` | *(laisse vide — Sentry est optionnel et l'app marchera sans)* |
