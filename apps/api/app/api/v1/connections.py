@@ -327,19 +327,35 @@ async def verify_2fa(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=str(e),
         )
+    except Exception as e:
+        logger.exception(f"[verify-2fa] Unexpected error for connection {connection_id}: {e}")
+        connection.last_error = f"Erreur inattendue: {str(e)[:200]}"
+        connection.status = ConnectionStatus.ERROR
+        await db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur lors de la vérification 2FA: {str(e)[:200]}",
+        )
 
     # Store session tokens in encrypted credentials for future syncs
-    credentials["session_token"] = session.session_token
-    credentials["refresh_token"] = session.refresh_token
-    credentials["session_cookies"] = session.cookies
-    credentials["session_created_at"] = session.created_at
-    credentials.pop("process_id", None)  # Remove consumed processId
+    try:
+        credentials["session_token"] = session.session_token
+        credentials["refresh_token"] = session.refresh_token
+        credentials["session_cookies"] = session.cookies
+        credentials["session_created_at"] = session.created_at
+        credentials.pop("process_id", None)  # Remove consumed processId
 
-    connection.encrypted_credentials = encrypt(
-        json.dumps(credentials).encode("utf-8")
-    )
-    await db.flush()
-    await db.commit()
+        connection.encrypted_credentials = encrypt(
+            json.dumps(credentials).encode("utf-8")
+        )
+        await db.flush()
+        await db.commit()
+    except Exception as e:
+        logger.exception(f"[verify-2fa] Failed to store session for {connection_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur lors de la sauvegarde de la session: {str(e)[:200]}",
+        )
 
     # Run sync in background to avoid Render 30s timeout
     asyncio.create_task(_background_sync(connection.id))

@@ -9,7 +9,7 @@ import time
 import uuid as uuid_mod
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request, status
+from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
@@ -178,6 +178,24 @@ app.add_middleware(GZipMiddleware, minimum_size=500)
 
 
 # ── Global exception handler ───────────────────────────────────
+def _add_cors_headers(request: Request, response: JSONResponse) -> JSONResponse:
+    """Ensure CORS headers on error responses (Starlette CORSMiddleware can miss them)."""
+    origin = request.headers.get("origin", "")
+    if origin and origin in settings.ALLOWED_ORIGINS:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+    return response
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    response = JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+    )
+    return _add_cors_headers(request, response)
+
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     correlation_id = getattr(request.state, "correlation_id", "unknown")
@@ -193,10 +211,13 @@ async def global_exception_handler(request: Request, exc: Exception):
     }
     if settings.DEBUG:
         content["traceback"] = str(exc)
-    return JSONResponse(
+
+    response = JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content=content,
     )
+
+    return _add_cors_headers(request, response)
 
 
 # ── Health check (legacy → redirect to /health/ready) ──────────
