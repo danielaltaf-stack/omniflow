@@ -31,6 +31,7 @@ from app.schemas.crypto import (
 )
 from app.services import crypto_service, coingecko
 from app.services import crypto_tax_engine
+from app.services import price_service
 from app.services.multichain_client import get_supported_chains
 
 router = APIRouter(prefix="/crypto", tags=["crypto"])
@@ -181,7 +182,7 @@ async def get_prices(symbols: str):
     symbol_list = [s.strip().upper() for s in symbols.split(",") if s.strip()]
     if not symbol_list:
         raise HTTPException(status_code=400, detail="Fournissez au moins un symbole.")
-    prices = await coingecko.get_prices(symbol_list)
+    prices = await price_service.get_prices(symbol_list)
     return prices
 
 

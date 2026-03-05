@@ -24,6 +24,7 @@ from app.services.kraken_client import KrakenClient
 from app.services.etherscan_client import EtherscanClient
 from app.services.multichain_client import MultichainClient, CHAINS
 from app.services import coingecko
+from app.services import price_service
 
 logger = logging.getLogger(__name__)
 
@@ -134,9 +135,23 @@ async def sync_wallet(db: AsyncSession, wallet: CryptoWallet) -> int:
         await db.commit()
         return 0
 
-    # Fetch current prices
+    # Fetch current prices (CoinGecko → Binance fallback)
     symbols = [h["asset"] for h in holdings_raw]
-    prices = await coingecko.get_prices(symbols)
+    prices = await price_service.get_prices(symbols)
+
+    if not prices:
+        logger.warning(
+            "[crypto_service] NO prices from any source for %s. "
+            "All values will be 0!",
+            symbols,
+        )
+    else:
+        missing = [s for s in symbols if s.upper() not in prices]
+        if missing:
+            logger.warning(
+                "[crypto_service] No price for symbols: %s",
+                missing,
+            )
 
     # Delete old holdings and insert fresh
     await db.execute(
@@ -321,9 +336,9 @@ async def get_portfolio_summary(db: AsyncSession, user_id: UUID) -> dict[str, An
     )
     holdings = result.scalars().all()
 
-    # Refresh prices
+    # Refresh prices (CoinGecko → Binance fallback)
     symbols = list({h.token_symbol for h in holdings})
-    prices = await coingecko.get_prices(symbols) if symbols else {}
+    prices = await price_service.get_prices(symbols) if symbols else {}
 
     total_value = 0
     weighted_change = 0.0
