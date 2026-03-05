@@ -93,8 +93,8 @@ export function AddBankModal({ isOpen, onClose, onSuccess }: AddBankModalProps) 
     setSyncProgress(0)
 
     const progressInterval = setInterval(() => {
-      setSyncProgress((p) => Math.min(p + 2, 90))
-    }, 100)
+      setSyncProgress((p) => Math.min(p + 0.5, 90))
+    }, 1000)
 
     const payload = {
       bank_module: selectedBank.module,
@@ -168,8 +168,8 @@ export function AddBankModal({ isOpen, onClose, onSuccess }: AddBankModalProps) 
     setSyncProgress(0)
 
     const progressInterval = setInterval(() => {
-      setSyncProgress((p) => Math.min(p + 1, 95))
-    }, 200)
+      setSyncProgress((p) => Math.min(p + 0.5, 95))
+    }, 1000)
 
     try {
       const result = await verify2FA(pendingConnectionId, code)

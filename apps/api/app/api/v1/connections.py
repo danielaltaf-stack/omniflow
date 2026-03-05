@@ -5,16 +5,18 @@ Handles both Woob (traditional banks) and Trade Republic (custom API).
 
 from __future__ import annotations
 
+import asyncio
 import json
+import logging
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
-from app.core.database import get_db
+from app.core.database import get_db, async_session_factory
 from app.core.encryption import encrypt, decrypt
 from app.models.account import Account
 from app.models.bank_connection import BankConnection, ConnectionStatus
@@ -27,6 +29,8 @@ from app.schemas.bank import (
 )
 from app.woob_engine.banks import get_bank_info, is_custom_module
 from app.woob_engine.sync_service import run_sync
+
+logger = logging.getLogger("omniflow.connections")
 
 router = APIRouter(prefix="/connections", tags=["Connections"])
 
@@ -44,6 +48,46 @@ class Verify2FAResponse(BaseModel):
     transactions_synced: int = 0
     error: str | None = None
     process_id: str | None = None
+
+
+async def _background_sync(connection_id: uuid.UUID) -> None:
+    """
+    Run sync in a background task with its own DB session.
+    This avoids Render's 30s request timeout causing CORS errors.
+    """
+    async with async_session_factory() as db:
+        try:
+            result = await db.execute(
+                select(BankConnection).where(BankConnection.id == connection_id)
+            )
+            connection = result.scalar_one_or_none()
+            if not connection:
+                logger.error(f"[bg-sync] Connection {connection_id} not found")
+                return
+            sync_result = await run_sync(connection, db)
+            if sync_result.success:
+                logger.info(
+                    f"[bg-sync] Connection {connection_id} synced: "
+                    f"{len(sync_result.accounts)} accounts"
+                )
+            else:
+                logger.warning(
+                    f"[bg-sync] Connection {connection_id} sync error: "
+                    f"{sync_result.error}"
+                )
+        except Exception as e:
+            logger.exception(f"[bg-sync] Connection {connection_id} failed: {e}")
+            try:
+                result = await db.execute(
+                    select(BankConnection).where(BankConnection.id == connection_id)
+                )
+                conn = result.scalar_one_or_none()
+                if conn:
+                    conn.status = ConnectionStatus.ERROR
+                    conn.last_error = str(e)[:500]
+                    await db.commit()
+            except Exception:
+                pass
 
 
 def _connection_to_response(conn: BankConnection) -> ConnectionResponse:
@@ -107,15 +151,14 @@ async def create_connection(
     await db.flush()
     await db.commit()
 
-    result = await run_sync(connection, db)
-    total_txns = sum(len(t) for t in result.transactions.values())
+    # Run sync in background to avoid Render 30s timeout
+    asyncio.create_task(_background_sync(connection.id))
 
     return SyncResponse(
         connection_id=connection.id,
-        status="active" if result.success else ("sca_required" if result.sca_required else "error"),
-        accounts_synced=len(result.accounts),
-        transactions_synced=total_txns,
-        error=result.error,
+        status="syncing",
+        accounts_synced=0,
+        transactions_synced=0,
     )
 
 
@@ -298,16 +341,60 @@ async def verify_2fa(
     await db.flush()
     await db.commit()
 
-    # Now run the actual data sync
-    sync_result = await run_sync(connection, db)
-    total_txns = sum(len(t) for t in sync_result.transactions.values())
+    # Run sync in background to avoid Render 30s timeout
+    asyncio.create_task(_background_sync(connection.id))
 
     return SyncResponse(
         connection_id=connection.id,
-        status="active" if sync_result.success else "error",
-        accounts_synced=len(sync_result.accounts),
-        transactions_synced=total_txns,
-        error=sync_result.error,
+        status="syncing",
+        accounts_synced=0,
+        transactions_synced=0,
+    )
+
+
+@router.get("/{connection_id}/sync-status", response_model=SyncResponse)
+async def get_sync_status(
+    connection_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Poll sync status for a connection (used after background sync)."""
+    result = await db.execute(
+        select(BankConnection).where(
+            BankConnection.id == connection_id,
+            BankConnection.user_id == user.id,
+        )
+    )
+    connection = result.scalar_one_or_none()
+    if not connection:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Connexion introuvable.",
+        )
+
+    # Count synced data
+    acct_result = await db.execute(
+        select(func.count(Account.id)).where(Account.connection_id == connection_id)
+    )
+    accounts_count = acct_result.scalar() or 0
+
+    txn_result = await db.execute(
+        select(func.count(Transaction.id)).where(
+            Transaction.account_id.in_(
+                select(Account.id).where(Account.connection_id == connection_id)
+            )
+        )
+    )
+    txns_count = txn_result.scalar() or 0
+
+    status_str = connection.status.value if isinstance(connection.status, ConnectionStatus) else connection.status
+
+    return SyncResponse(
+        connection_id=connection.id,
+        status=status_str,
+        accounts_synced=accounts_count,
+        transactions_synced=txns_count,
+        error=connection.last_error,
     )
 
 
@@ -354,13 +441,15 @@ async def sync_connection(
             detail="Connexion introuvable.",
         )
 
-    sync_result = await run_sync(connection, db)
-    total_txns = sum(len(t) for t in sync_result.transactions.values())
+    # Run sync in background to avoid Render 30s timeout
+    asyncio.create_task(_background_sync(connection.id))
+
+    connection.status = ConnectionStatus.SYNCING
+    await db.commit()
 
     return SyncResponse(
         connection_id=connection.id,
-        status="active" if sync_result.success else "error",
-        accounts_synced=len(sync_result.accounts),
-        transactions_synced=total_txns,
-        error=sync_result.error,
+        status="syncing",
+        accounts_synced=0,
+        transactions_synced=0,
     )

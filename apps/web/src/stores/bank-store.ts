@@ -36,6 +36,7 @@ interface BankState {
     credentials: Record<string, string>
   }) => Promise<SyncResponse>
   verify2FA: (connectionId: string, code: string) => Promise<SyncResponse>
+  pollSyncStatus: (connectionId: string, maxAttempts?: number) => Promise<SyncResponse>
   deleteConnection: (id: string) => Promise<void>
   syncConnection: (id: string) => Promise<SyncResponse>
   clearError: () => void
@@ -99,7 +100,11 @@ export const useBankStore = create<BankState>((set, get) => ({
     set({ isSyncing: true, error: null })
     try {
       const result = await apiClient.post<SyncResponse>('/api/v1/connections', data)
-      // Refresh connections and accounts after sync
+      // If sync is running in background, poll for completion
+      if (result.status === 'syncing') {
+        const finalResult = await get().pollSyncStatus(result.connection_id)
+        return finalResult
+      }
       await get().fetchConnections()
       await get().fetchAccounts()
       set({ isSyncing: false })
@@ -117,6 +122,11 @@ export const useBankStore = create<BankState>((set, get) => ({
         `/api/v1/connections/${connectionId}/verify-2fa`,
         { code }
       )
+      // If sync is running in background, poll for completion
+      if (result.status === 'syncing') {
+        const finalResult = await get().pollSyncStatus(connectionId)
+        return finalResult
+      }
       await get().fetchConnections()
       await get().fetchAccounts()
       set({ isSyncing: false })
@@ -125,6 +135,35 @@ export const useBankStore = create<BankState>((set, get) => ({
       set({ error: e.message, isSyncing: false })
       throw e
     }
+  },
+
+  pollSyncStatus: async (connectionId: string, maxAttempts = 60) => {
+    // Poll every 3s for up to ~3 minutes
+    for (let i = 0; i < maxAttempts; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 3000))
+      try {
+        const status = await apiClient.get<SyncResponse>(
+          `/api/v1/connections/${connectionId}/sync-status`
+        )
+        if (status.status === 'active' || status.status === 'error') {
+          await get().fetchConnections()
+          await get().fetchAccounts()
+          set({ isSyncing: false })
+          return status
+        }
+      } catch {
+        // Ignore transient errors during polling
+      }
+    }
+    // Timeout — return what we have
+    set({ isSyncing: false })
+    return {
+      connection_id: connectionId,
+      status: 'error',
+      accounts_synced: 0,
+      transactions_synced: 0,
+      error: 'Synchronisation trop longue. Veuillez réessayer.',
+    } as SyncResponse
   },
 
   deleteConnection: async (id: string) => {
@@ -144,6 +183,11 @@ export const useBankStore = create<BankState>((set, get) => ({
         `/api/v1/connections/${id}/sync`,
         {}
       )
+      // If sync is running in background, poll for completion
+      if (result.status === 'syncing') {
+        const finalResult = await get().pollSyncStatus(id)
+        return finalResult
+      }
       await get().fetchConnections()
       await get().fetchAccounts()
       set({ isSyncing: false })
