@@ -122,6 +122,13 @@ class WoobWorker:
                 "Aucun mode démo disponible."
             )
 
+        # Ensure cragr module is patched (safety net)
+        try:
+            from app.woob_engine.patch_cragr_runtime import patch_cragr_pages
+            patch_cragr_pages()
+        except Exception:
+            pass  # Non-critical
+
         try:
             from woob.exceptions import (  # type: ignore
                 ActionNeeded,

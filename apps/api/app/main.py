@@ -51,6 +51,13 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("%s v%s starting (env=%s)...", settings.APP_NAME, settings.APP_VERSION, settings.ENVIRONMENT)
 
+    # Runtime-patch woob cragr module (safety net if Docker build-time patch failed)
+    try:
+        from app.woob_engine.patch_cragr_runtime import patch_cragr_pages
+        patch_cragr_pages()
+    except Exception as e:
+        logger.warning("Runtime cragr patch failed (non-fatal): %s", e)
+
     # Initialize Sentry (no-op if DSN not configured)
     sentry_env = settings.SENTRY_ENVIRONMENT or settings.ENVIRONMENT
     init_sentry(

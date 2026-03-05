@@ -48,9 +48,10 @@ modules = [\
 [w.repositories.install(w.repositories.get_module_info(m)) for m in modules];\
 print(f'{len(modules)} woob modules installed')"
 
-# Patch woob cragr module
+# Patch woob cragr module (add default= to Dict() calls for incomplete JSON)
+# Cache-bust: changing patch_cragr.py content invalidates this layer
 COPY patch_cragr.py /tmp/patch_cragr.py
-RUN python /tmp/patch_cragr.py && rm /tmp/patch_cragr.py
+RUN python /tmp/patch_cragr.py || echo "WARNING: build-time patch failed (runtime patch will retry)" && rm -f /tmp/patch_cragr.py
 
 
 # ── Stage 3: Runtime (Production) ──────────────────────────────
