@@ -226,7 +226,11 @@ class TradeRepublicClient:
                 )
 
             # Extract session from cookies / response
-            cookies = dict(resp.cookies)
+            # httpx.Cookies can contain duplicate cookie names (different paths/domains)
+            # Use the jar items directly to avoid "Multiple cookies exist" error
+            cookies: dict[str, str] = {}
+            for cookie in resp.cookies.jar:
+                cookies[cookie.name] = cookie.value  # last value wins for duplicates
             session_token = cookies.get("tr_session", "")
             refresh_token = cookies.get("tr_refresh", "")
 
