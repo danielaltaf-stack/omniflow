@@ -23,6 +23,9 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # ── Stage 2: Woob Module Installer ─────────────────────────────
 FROM python:3.12-slim AS woob-init
 
+# Prevent Python from creating .pyc bytecode caches (so file patches work)
+ENV PYTHONDONTWRITEBYTECODE=1
+
 WORKDIR /app
 
 # Copy compiled packages from builder
@@ -51,7 +54,9 @@ print(f'{len(modules)} woob modules installed')"
 # Patch woob cragr module (add default= to Dict() calls for incomplete JSON)
 # Cache-bust: changing patch_cragr.py content invalidates this layer
 COPY patch_cragr.py /tmp/patch_cragr.py
-RUN python /tmp/patch_cragr.py || echo "WARNING: build-time patch failed (runtime patch will retry)" && rm -f /tmp/patch_cragr.py
+RUN python /tmp/patch_cragr.py || echo "WARNING: build-time patch failed (runtime patch will retry)" \
+    && rm -f /tmp/patch_cragr.py \
+    && find /root/.local/share/woob -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 
 
 # ── Stage 3: Runtime (Production) ──────────────────────────────

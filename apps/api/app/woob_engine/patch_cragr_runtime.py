@@ -1,28 +1,109 @@
 """
-Runtime patch for woob cragr module.
-Adds default= to ALL Dict() calls in cragr/pages.py that don't have one.
-Runs at app startup so it works even if the Docker build-time patch failed.
+Runtime patch for woob cragr module — DEFINITIVE FIX.
 
-This is a safety net — the Dockerfile also applies patch_cragr.py at build time.
+The build-time file patch (patch_cragr.py) modifies the .py source on disk,
+but Python uses pre-compiled .pyc bytecode cached from the Docker woob-init
+stage.  The .pyc was created BEFORE the patch, so the patch is silently
+ignored at runtime.
+
+This module provides TWO complementary fixes:
+
+1. **monkey_patch_woob_dict()** — modifies the live Dict class IN MEMORY.
+   This is immune to .pyc caching because it changes the Python class object
+   directly, not a file on disk.
+
+2. **patch_cragr_pages()** — file-based patch kept as a belt-and-suspenders
+   fallback.  Also deletes .pyc files so the next import picks up the
+   patched .py source.
 """
 
 import glob
 import logging
 import os
 import re
+import shutil
 
 logger = logging.getLogger("omniflow.patch")
 
-_PATCHED = False
+_MONKEY_PATCHED = False
+_FILE_PATCHED = False
 
+
+# ═══════════════════════════════════════════════════════════════════
+# FIX 1 — In-memory monkey-patch (the definitive one)
+# ═══════════════════════════════════════════════════════════════════
+
+def monkey_patch_woob_dict() -> bool:
+    """
+    Monkey-patch woob's ``Dict.filter`` IN MEMORY so that missing JSON keys
+    return ``""`` instead of raising ``ItemNotFound``.
+
+    This is the definitive fix for the Crédit Agricole error::
+
+        Element ['comptePrincipal', 'codeFamilleProduitBam'] not found
+
+    Unlike file-based patches, this works regardless of .pyc bytecode
+    caching because it modifies the live Python class object.
+    """
+    global _MONKEY_PATCHED
+    if _MONKEY_PATCHED:
+        return False
+
+    try:
+        from woob.browser.filters.json import Dict  # type: ignore
+    except ImportError:
+        logger.debug("[monkey-patch] woob not installed — skipping Dict patch")
+        return False
+
+    # Import ItemNotFound — try multiple paths for different woob versions
+    ItemNotFound = None
+    for mod_path, attr in [
+        ("woob.browser.filters.base", "ItemNotFound"),
+        ("woob.exceptions", "ItemNotFound"),
+        ("woob.browser.filters.base", "FilterError"),
+    ]:
+        try:
+            mod = __import__(mod_path, fromlist=[attr])
+            ItemNotFound = getattr(mod, attr)
+            break
+        except (ImportError, AttributeError):
+            continue
+
+    if ItemNotFound is None:
+        ItemNotFound = Exception  # ultimate fallback
+
+    original_filter = Dict.filter
+
+    def safe_filter(self, value):
+        """Wrapped Dict.filter: returns '' on missing key instead of crashing."""
+        try:
+            return original_filter(self, value)
+        except ItemNotFound:
+            sel = "/".join(self.selector) if hasattr(self, "selector") else "?"
+            logger.debug("[monkey-patch] Dict('%s') → key missing, returning ''", sel)
+            return ""
+
+    Dict.filter = safe_filter
+    _MONKEY_PATCHED = True
+    logger.info(
+        "[monkey-patch] woob Dict.filter patched — missing JSON keys "
+        "now return '' instead of raising ItemNotFound"
+    )
+    return True
+
+
+# ═══════════════════════════════════════════════════════════════════
+# FIX 2 — File-based patch (belt-and-suspenders fallback)
+# ═══════════════════════════════════════════════════════════════════
 
 def patch_cragr_pages() -> bool:
     """
     Find and patch cragr/pages.py at runtime.
+    Also deletes .pyc caches so the patched .py source takes effect.
     Returns True if patches were applied, False if already patched or not found.
     """
-    global _PATCHED
-    if _PATCHED:
+    global _FILE_PATCHED
+    if _FILE_PATCHED:
         return False
 
     # Auto-discover cragr/pages.py
@@ -40,7 +121,7 @@ def patch_cragr_pages() -> bool:
             break
 
     if not path:
-        logger.debug("[patch_cragr] cragr/pages.py not found — skipping runtime patch")
+        logger.debug("[patch_cragr] cragr/pages.py not found — skipping file patch")
         return False
 
     try:
@@ -50,29 +131,20 @@ def patch_cragr_pages() -> bool:
         logger.warning("[patch_cragr] Cannot read %s: %s", path, e)
         return False
 
-    original = content
-
     # ── Patch ALL Dict('field') or Dict("field") without default= ──
-    # Strategy: use re.sub with a callback that checks context
     patches = [0]  # mutable counter for closure
 
     def _add_default(m):
-        """Add default="" to a Dict() call if it doesn't already have one."""
         quote = m.group(1)
         field = m.group(2)
         patches[0] += 1
         return f'Dict({quote}{field}{quote}, default="")'
 
-    # Match Dict('field') or Dict("field") but NOT Dict('field', default=...)
-    # Negative lookahead: not followed by comma+default
     pattern = re.compile(r'''Dict\((['"])([^'"]+)\1\)(?!\s*#.*default)''')
 
-    # First pass: check which ones DON'T already have default
     new_content = []
     last_end = 0
     for m in pattern.finditer(content):
-        # Verify this Dict() doesn't already have default= somewhere
-        # (our pattern already ensures the closing ) is right after the field)
         start, end = m.start(), m.end()
         new_content.append(content[last_end:start])
         new_content.append(_add_default(m))
@@ -85,19 +157,34 @@ def patch_cragr_pages() -> bool:
         try:
             with open(path, "w") as f:
                 f.write(new_content)
-            logger.info(
-                "[patch_cragr] Runtime patched %d Dict() calls in %s",
-                count, path,
-            )
+            logger.info("[patch_cragr] File-patched %d Dict() calls in %s", count, path)
         except PermissionError:
-            logger.warning(
-                "[patch_cragr] Cannot write %s (permission denied). "
-                "Dict() calls not patched — bank sync may fail for Crédit Agricole.",
-                path,
-            )
+            logger.warning("[patch_cragr] Cannot write %s (permission denied)", path)
             return False
+
+        # ── Delete ALL .pyc / __pycache__ for cragr so Python re-reads .py ──
+        cragr_dir = os.path.dirname(path)
+        for root, dirs, files in os.walk(cragr_dir):
+            for d in dirs:
+                if d == "__pycache__":
+                    cache_dir = os.path.join(root, d)
+                    try:
+                        shutil.rmtree(cache_dir)
+                        logger.info("[patch_cragr] Deleted bytecode cache: %s", cache_dir)
+                    except Exception:
+                        pass
     else:
         logger.debug("[patch_cragr] cragr/pages.py already fully patched")
 
-    _PATCHED = True
-    return patches > 0
+    _FILE_PATCHED = True
+    return count > 0
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Combined entry point
+# ═══════════════════════════════════════════════════════════════════
+
+def apply_all_cragr_patches() -> None:
+    """Apply both the in-memory monkey-patch AND the file-based patch."""
+    monkey_patch_woob_dict()   # ← the one that actually works
+    patch_cragr_pages()        # ← belt-and-suspenders fallback

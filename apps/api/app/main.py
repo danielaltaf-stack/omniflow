@@ -53,8 +53,8 @@ async def lifespan(app: FastAPI):
 
     # Runtime-patch woob cragr module (safety net if Docker build-time patch failed)
     try:
-        from app.woob_engine.patch_cragr_runtime import patch_cragr_pages
-        patch_cragr_pages()
+        from app.woob_engine.patch_cragr_runtime import apply_all_cragr_patches
+        apply_all_cragr_patches()
     except Exception as e:
         logger.warning("Runtime cragr patch failed (non-fatal): %s", e)
 
