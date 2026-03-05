@@ -12,13 +12,14 @@ from typing import Any
 
 import httpx
 
-from app.core.config import settings
+from app.core.config import get_settings
 from app.core.redis import redis_client
 
 logger = logging.getLogger(__name__)
 
 # Use pro endpoint if pro key, otherwise demo endpoint
-_API_KEY = (settings.COINGECKO_API_KEY or "").strip()
+_settings = get_settings()
+_API_KEY = (_settings.COINGECKO_API_KEY or "").strip()
 if _API_KEY and _API_KEY.startswith("CG-"):
     # Pro key → pro endpoint
     COINGECKO_BASE = "https://pro-api.coingecko.com/api/v3"
